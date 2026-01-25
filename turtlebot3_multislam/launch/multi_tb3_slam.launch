@@ -6,7 +6,6 @@
             <arg name="odom_frame" value="tb3_1/odom"/>
             <arg name="map_frame"  value="tb3_1/map"/>
             <arg name="ns" value="tb3_1"/>
-            <!-- <remap from="scan" to="scan_fixed"/> -->
         </include>
     </group>
 
@@ -17,7 +16,6 @@
             <arg name="odom_frame" value="tb3_2/odom"/>
             <arg name="map_frame"  value="tb3_2/map"/>
             <arg name="ns" value="tb3_2"/>
-            <!-- <remap from="scan" to="scan_fixed"/> -->
         </include>
     </group>
 </launch>

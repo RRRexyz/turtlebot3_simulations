@@ -12,7 +12,5 @@
     <param name="odom_frame" value="$(arg set_odom_frame)"/>
     <param name="map_frame"  value="$(arg set_map_frame)"/>
     <rosparam command="load" file="$(find turtlebot3_slam)/config/gmapping_params.yaml" />
-    
-    <remap from="scan" to="scan_fixed"/>
   </node>
 </launch>

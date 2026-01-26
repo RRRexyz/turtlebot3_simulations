@@ -23,7 +23,6 @@
       <param name="tf_prefix" value="tb3_1" />
     </node>
     <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model)_1 -x $(arg x_pos_1) -y $(arg y_pos_1) -z $(arg z_pos_1) -param robot_description" />
-    <node pkg="turtlebot3_multislam" type="change_scan_frame.py" name="change_scan_frame" output="screen"/>
   </group>
 
   <group ns="tb3_2">
@@ -33,6 +32,5 @@
       <param name="tf_prefix" value="tb3_2" />
     </node>
     <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model)_2 -x $(arg x_pos_2) -y $(arg y_pos_2) -z $(arg z_pos_2) -param robot_description" />
-    <node pkg="turtlebot3_multislam" type="change_scan_frame.py" name="change_scan_frame" output="screen"/>
   </group>
 </launch>

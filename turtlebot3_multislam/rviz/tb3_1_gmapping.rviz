@@ -136,7 +136,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.0300000007
       Style: Flat Squares
-      Topic: /tb3_1/scan_fixed
+      Topic: /tb3_1/scan
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true

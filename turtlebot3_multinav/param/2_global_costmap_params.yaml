@@ -8,6 +8,6 @@ global_costmap:
 
   static_map: false  
   rolling_window: true
-  width: 3
-  height: 3
+  width: 24
+  height: 24
   resolution: 0.05

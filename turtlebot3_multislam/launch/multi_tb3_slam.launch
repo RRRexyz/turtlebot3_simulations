@@ -18,4 +18,14 @@
             <arg name="ns" value="tb3_2"/>
         </include>
     </group>
+
+    <group ns="tb3_3">
+        <include file="$(find turtlebot3_multislam)/launch/tb3_slam.launch">
+            <!-- important: All TF frames should be in namespaces-->
+            <arg name="base_frame" value="tb3_3/base_footprint"/>
+            <arg name="odom_frame" value="tb3_3/odom"/>
+            <arg name="map_frame"  value="tb3_3/map"/>
+            <arg name="ns" value="tb3_3"/>
+        </include>
+    </group>
 </launch>

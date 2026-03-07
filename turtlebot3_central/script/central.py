@@ -453,6 +453,14 @@ if __name__ == "__main__":
             
             # 持续发布当前所有活跃的任务分配标记（包括正在执行的）
             explorer.publish_assignments(controller.current_goals)
+
+            # TODO: 由于全局地图的漂移问题，目标点有时候会跑到封闭空间外部，从而无法到达，导致机器人原地卡死
+            # TODO: 此时需要一个重新分配机制。
+
+            # TODO: 在计算收益时，如果某个 Frontier 附近的 Frontier 已经被其他机器人作为目标点，
+            # TODO: 则大幅降低其在其他机器人处的收益。
+
+            # TODO: 修改探索结束判断条件（注意封闭空间与开放空间的区别）
             
             rate.sleep()
             

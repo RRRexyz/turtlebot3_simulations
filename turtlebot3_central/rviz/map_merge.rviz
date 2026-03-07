@@ -65,10 +65,10 @@ Visualization Manager:
       Value: true
     - Class: rviz/MarkerArray
       Enabled: true
-      Marker Topic: /frontier_markers
+      Marker Topic: /assignment_markers
       Name: MarkerArray
       Namespaces:
-        frontiers: true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true
@@ -99,7 +99,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 19.40817642211914
+      Distance: 18.001632690429688
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -136,4 +136,4 @@ Window Geometry:
     collapsed: true
   Width: 1200
   X: 363
-  Y: 56
+  Y: 27

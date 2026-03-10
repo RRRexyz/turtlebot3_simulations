@@ -298,7 +298,7 @@ class FrontierExplorer:
         self.assignment_pub.publish(marker_array)
 
 
-class CentralController:
+class TaskAssigner:
     def __init__(self):
         self.clients = {
             'tb3_1': actionlib.SimpleActionClient('/tb3_1/move_base', MoveBaseAction),
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     
     # 初始化探索器和控制器
     explorer = FrontierExplorer()
-    controller = CentralController()
+    task_assigner = TaskAssigner()
     tf_listener = tf.TransformListener()
     
     # 等待一段时间让TF数据准备好
@@ -410,8 +410,8 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         try:
             # 步骤1: 检查状态 - 获取空闲机器人
-            idle_robots = controller.get_idle_robots()
-            all_idle = controller.all_robots_idle()
+            idle_robots = task_assigner.get_idle_robots()
+            all_idle = task_assigner.all_robots_idle()
             
             # 步骤2: 获取位姿
             robot_positions = explorer.get_robot_positions(tf_listener)
@@ -447,12 +447,12 @@ if __name__ == "__main__":
                     rospy.loginfo(f"Assigning {len(assignments)} tasks...")
                     for robot_name, frontier in assignments.items():
                         # 步骤7: 发送目标会自动标记为忙碌
-                        controller.send_goal(robot_name, frontier)
+                        task_assigner.send_goal(robot_name, frontier)
                 else:
                     rospy.loginfo("No assignments made (all idle robots may be too far or no suitable frontiers)")
             
             # 持续发布当前所有活跃的任务分配标记（包括正在执行的）
-            explorer.publish_assignments(controller.current_goals)
+            explorer.publish_assignments(task_assigner.current_goals)
 
             # TODO: 由于全局地图的漂移问题，目标点有时候会跑到封闭空间外部，从而无法到达，导致机器人原地卡死
             # TODO: 此时需要一个重新分配机制。
@@ -466,7 +466,7 @@ if __name__ == "__main__":
             
         except KeyboardInterrupt:
             rospy.loginfo("Keyboard interrupt, cancelling all goals...")
-            controller.cancel_all_goals()
+            task_assigner.cancel_all_goals()
             break
         except Exception as e:
             rospy.logerr(f"Error in main loop: {e}")

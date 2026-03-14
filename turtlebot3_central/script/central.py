@@ -36,8 +36,8 @@ class FrontierExplorer:
         frontiers = list()
         data = np.array(self.map_data.data).reshape((height, width))
 
-        # 定义邻居方向 (4邻域)
-        neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        # 定义邻居方向 (8邻域)
+        neighbors = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
 
         # 访问矩阵，标记已访问的栅格
         visited = np.zeros_like(data, dtype=bool)
@@ -156,17 +156,21 @@ class FrontierExplorer:
                 rospy.logwarn(f"Cannot get position of {name}")
         return robot_positions
 
-    def assign_tasks(self, frontiers, robot_positions, idle_robots):
+    def assign_tasks(self, frontiers, robot_positions, idle_robots, active_goals=None):
         """为空闲机器人分配frontier目标
         
         Args:
             frontiers: 列表 [(x, y, size), ...]
             robot_positions: 字典 { 'tb3_1': (x, y), 'tb3_2': (x, y) }
             idle_robots: 空闲机器人名称列表
+            active_goals: 字典 { 'robot_name': (x, y, size), ... } 正在执行的目标
             
         Returns:
             assignments: 字典 { 'robot_name': (x, y, size), ... }
         """
+        if active_goals is None:
+            active_goals = {}
+            
         assignments = dict()
         # 复制一份用于删除已分配的
         available_frontiers = frontiers.copy()
@@ -191,8 +195,17 @@ class FrontierExplorer:
                 if dist < 0.1:
                     dist = 0.1  # 避免除以零
 
-                # 收益函数：大小/距离
-                utility = fsize / dist
+                # 计算该frontier距离其他正在被执行的目标点的距离惩罚
+                penalty = 1.0
+                for busy_robot, goal in active_goals.items():
+                    gx, gy, _ = goal
+                    dist_to_active = np.sqrt((fx - gx)**2 + (fy - gy)**2)
+                    if dist_to_active < 1.0: # 如果距离其他机器人的目标点小于 1 米
+                        penalty = 0.01 # 收益降至 1%
+                        break # 被惩罚一次就够了
+
+                # 收益函数：大小/距离 * 惩罚因子
+                utility = (fsize / dist) * penalty
 
                 if utility > max_utility:
                     max_utility = utility
@@ -200,6 +213,8 @@ class FrontierExplorer:
 
             if best_frontier:
                 assignments[robot_name] = best_frontier
+                # 加入正在执行的目标列表中，以便同一个循环里的下一个 idle_robot 避开它
+                active_goals[robot_name] = best_frontier
                 available_frontiers.remove(best_frontier)
 
         return assignments
@@ -440,7 +455,9 @@ if __name__ == "__main__":
             
             # 步骤5: 任务分配 - 只为空闲机器人分配
             if len(idle_robots) > 0 and len(frontiers) > 0:
-                assignments = explorer.assign_tasks(frontiers, robot_positions, idle_robots)
+                # 传入其他机器人正在执行的目标（不包含本循环中的空闲机器人，避免自身的影响）
+                active_goals_copy = task_assigner.current_goals.copy()
+                assignments = explorer.assign_tasks(frontiers, robot_positions, idle_robots, active_goals=active_goals_copy)
                 
                 # 步骤6: 执行 - 发送目标到机器人
                 if len(assignments) > 0:

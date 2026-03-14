@@ -1,6 +1,6 @@
 <launch>
     <group ns="tb3_1">
-        <include file="$(find turtlebot3_multislam)/launch/tb3_slam.launch">
+        <include file="$(find turtlebot3_multislam)/launch/tb3_slam_gmapping.launch">
             <!-- important: All TF frames should be in namespaces-->
             <arg name="base_frame" value="tb3_1/base_footprint"/>
             <arg name="odom_frame" value="tb3_1/odom"/>
@@ -10,7 +10,7 @@
     </group>
 
     <group ns="tb3_2">
-        <include file="$(find turtlebot3_multislam)/launch/tb3_slam.launch">
+        <include file="$(find turtlebot3_multislam)/launch/tb3_slam_gmapping.launch">
             <!-- important: All TF frames should be in namespaces-->
             <arg name="base_frame" value="tb3_2/base_footprint"/>
             <arg name="odom_frame" value="tb3_2/odom"/>
@@ -20,7 +20,7 @@
     </group>
 
     <group ns="tb3_3">
-        <include file="$(find turtlebot3_multislam)/launch/tb3_slam.launch">
+        <include file="$(find turtlebot3_multislam)/launch/tb3_slam_gmapping.launch">
             <!-- important: All TF frames should be in namespaces-->
             <arg name="base_frame" value="tb3_3/base_footprint"/>
             <arg name="odom_frame" value="tb3_3/odom"/>

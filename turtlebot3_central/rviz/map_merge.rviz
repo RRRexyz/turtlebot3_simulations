@@ -68,7 +68,8 @@ Visualization Manager:
       Marker Topic: /assignment_markers
       Name: MarkerArray
       Namespaces:
-        {}
+        assignment_labels: true
+        assignments: true
       Queue Size: 100
       Value: true
   Enabled: true
@@ -99,7 +100,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 18.001632690429688
+      Distance: 21.308395385742188
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -107,9 +108,9 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.6521143913269043
-        Y: 0.6548222899436951
-        Z: 0.26973220705986023
+        X: 0.058640822768211365
+        Y: -1.1318374872207642
+        Z: 0.2691676914691925
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
@@ -117,7 +118,7 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 3.1304008960723877
+      Yaw: 3.1254007816314697
     Saved: ~
 Window Geometry:
   Displays:

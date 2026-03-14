@@ -3,6 +3,7 @@ import rospy
 from nav_msgs.msg import OccupancyGrid
 from visualization_msgs.msg import Marker, MarkerArray
 import numpy as np
+import cv2
 from collections import deque
 import tf
 import actionlib
@@ -24,7 +25,49 @@ class FrontierExplorer:
         }
 
     def map_callback(self, msg):
-        self.map_data = msg
+        """对订阅到的地图应用滤波，去除因为互相观测导致的虚假小障碍物连通域"""
+        try:
+            width = msg.info.width
+            height = msg.info.height
+            
+            # 将占据栅格数据转为 numpy，方便图像处理
+            data = np.array(msg.data, dtype=np.int8).reshape((height, width))
+            
+            # 创建仅包含障碍物的二值化图像 (假设障碍物 > 50 概率)
+            obstacle_mask = (data > 50).astype(np.uint8) * 255
+            
+            # 寻找所有连通域
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(obstacle_mask, connectivity=8)
+            
+            # 背景色占据了label 0, 所以从1开始遍历
+            # stats 中包含每个连通域的具体面积 (像素数)
+            for i in range(1, num_labels):
+                area = stats[i, cv2.CC_STAT_AREA]
+                # 设定阈值：根据 Turtlebot3 投影面积(约30个栅格)来过滤小面积噪点或动态机器人残影
+                if area < 30:
+                    # 将这一块小面积障碍物设回自由区域(0)
+                    obstacle_mask[labels == i] = 0
+            
+            # 提取清理过的小连通域的掩膜，修改原地图数据
+            cleaned_obstacles = (obstacle_mask == 255)
+            # 原本是障碍物，但连通域被标记清理后，我们将其重写为自由空间 (0)
+            data[(data > 50) & ~cleaned_obstacles] = 0
+            
+            # 重写回消息
+            msg.data = tuple(data.flatten())
+            self.map_data = msg
+            
+        except Exception as e:
+            rospy.logwarn(f"Map filter error: {e}")
+            self.map_data = msg
+
+    def get_known_area(self):
+        """计算当前地图中已知区域（值为 0-100 的栅格数）"""
+        if self.map_data is None:
+            return 0
+        data = np.array(self.map_data.data)
+        known_cells = np.sum((data >= 0) & (data <= 100))
+        return known_cells
 
     def detect_frontiers(self):
         if self.map_data is None:
@@ -84,7 +127,7 @@ class FrontierExplorer:
                                             queue.append((nx, ny))
 
                         # 3. 过滤并计算中心点
-                        if len(cluster) > 5: # 阈值，忽略小簇
+                        if len(cluster) > 15: # 阈值，忽略小簇
                             # 计算平均坐标
                             avg_x = np.mean([p[0] for p in cluster])
                             avg_y = np.mean([p[1] for p in cluster])
@@ -330,6 +373,9 @@ class TaskAssigner:
         
         # 记录当前分配给每个机器人的目标
         self.current_goals = {}
+        
+        # 记录每个机器人开始执行目标的时间
+        self.goal_start_times = {}
 
         # 连接服务器
         for name, client in self.clients.items():
@@ -356,6 +402,7 @@ class TaskAssigner:
         # 标记机器人为忙碌状态
         self.robot_status[robot_name] = 'BUSY'
         self.current_goals[robot_name] = goal_coords
+        self.goal_start_times[robot_name] = rospy.Time.now()
         
         # 发送目标，使用 lambda 来传递 robot_name
         self.clients[robot_name].send_goal(
@@ -397,6 +444,19 @@ class TaskAssigner:
         """检查是否所有机器人都空闲"""
         return all(status == 'IDLE' for status in self.robot_status.values())
     
+    def check_timeouts(self, timeout_sec=40.0):
+        """检查是否有机器人的目标执行超时"""
+        current_time = rospy.Time.now()
+        for robot_name, status in list(self.robot_status.items()):
+            if status == 'BUSY' and robot_name in self.goal_start_times:
+                elapsed = (current_time - self.goal_start_times[robot_name]).to_sec()
+                if elapsed > timeout_sec:
+                    rospy.logwarn(f"Goal for {robot_name} timed out ({timeout_sec}s). Cancelling...")
+                    self.clients[robot_name].cancel_goal()
+                    self.robot_status[robot_name] = 'IDLE'
+                    if robot_name in self.current_goals:
+                        del self.current_goals[robot_name]
+    
     def cancel_all_goals(self):
         """取消所有机器人的当前目标"""
         for robot_name, client in self.clients.items():
@@ -422,8 +482,17 @@ if __name__ == "__main__":
     rate = rospy.Rate(1)  # 1 Hz
     exploration_completed = False
 
+    # 初始化面积检测相关的变量
+    last_area_check_time = rospy.Time.now()
+    area_check_interval = 30.0  # 每 30 秒检查一次面积增加
+    previous_known_area = 0
+    area_increment_threshold = 100  # 面积增量小于该阈值（栅格数）则认为探索完成
+
     while not rospy.is_shutdown():
         try:
+            # 检查目标是否超时 (40秒)
+            task_assigner.check_timeouts(40.0)
+
             # 步骤1: 检查状态 - 获取空闲机器人
             idle_robots = task_assigner.get_idle_robots()
             all_idle = task_assigner.all_robots_idle()
@@ -438,20 +507,33 @@ if __name__ == "__main__":
             # 发布可视化标记
             explorer.publish_markers(frontiers)
             
-            # 步骤4: 判断终止 - 如果没有frontier且所有机器人都空闲，探索完成
-            if len(frontiers) == 0 and all_idle:
+            # 定期判断已知区域面积增长情况
+            current_time = rospy.Time.now()
+            area_stopped_growing = False
+            if not exploration_completed and (current_time - last_area_check_time).to_sec() >= area_check_interval:
+                current_known_area = explorer.get_known_area()
+                area_increment = current_known_area - previous_known_area
+                rospy.loginfo(f"Area check: current known area = {current_known_area}, increment = {area_increment}")
+                
+                if previous_known_area > 0 and area_increment < area_increment_threshold:
+                    area_stopped_growing = True
+                
+                previous_known_area = current_known_area
+                last_area_check_time = current_time
+
+            # 步骤4: 判断终止 - 整合条件（面积不再增加 或 无frontier且全空闲）。一处满足即彻底结束。
+            if exploration_completed or area_stopped_growing or (len(frontiers) == 0 and all_idle):
                 if not exploration_completed:
                     rospy.loginfo("="*50)
-                    rospy.loginfo("Exploration completed! No more frontiers.")
+                    reason = "Known area stopped growing." if area_stopped_growing else "No more frontiers."
+                    rospy.loginfo(f"Exploration completed! {reason}")
                     rospy.loginfo("="*50)
                     exploration_completed = True
-                # 继续循环以保持可视化更新，但不分配新任务
+                    task_assigner.cancel_all_goals()
+                
+                # 持续保持结束状态以更新可视化，不再分配新任务且不重置完成状态
                 rate.sleep()
                 continue
-            
-            # 如果有新的frontier出现，重置完成标志
-            if len(frontiers) > 0:
-                exploration_completed = False
             
             # 步骤5: 任务分配 - 只为空闲机器人分配
             if len(idle_robots) > 0 and len(frontiers) > 0:
@@ -470,14 +552,6 @@ if __name__ == "__main__":
             
             # 持续发布当前所有活跃的任务分配标记（包括正在执行的）
             explorer.publish_assignments(task_assigner.current_goals)
-
-            # TODO: 由于全局地图的漂移问题，目标点有时候会跑到封闭空间外部，从而无法到达，导致机器人原地卡死
-            # TODO: 此时需要一个重新分配机制。
-
-            # TODO: 在计算收益时，如果某个 Frontier 附近的 Frontier 已经被其他机器人作为目标点，
-            # TODO: 则大幅降低其在其他机器人处的收益。
-
-            # TODO: 修改探索结束判断条件（注意封闭空间与开放空间的区别）
             
             rate.sleep()
             

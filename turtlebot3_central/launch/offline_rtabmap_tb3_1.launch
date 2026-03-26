@@ -1,0 +1,33 @@
+    <launch>
+    <!-- 1. 从 bag 回放数据 -->
+    <param name="/use_sim_time" value="true"/>
+
+    <arg name="bag" default="$(find turtlebot3_central)/bag/1.bag"/>
+    <node pkg="rosbag" type="play" name="player"
+            args="--clock $(arg bag)"/>
+
+    <!-- 补足缺失的 TF：从机器人的 base_footprint 到相机的光学坐标系 -->
+    <node pkg="tf" type="static_transform_publisher" name="camera_tf_publisher"
+        args="0.069 -0.047 0.107 -1.57079632679 0 -1.57079632679 tb3_1/base_footprint camera_rgb_optical_frame 100" />
+
+    <!-- 2. RTAB-Map 节点，离线建图 -->
+    <include file="$(find rtabmap_launch)/launch/rtabmap.launch">
+    <!-- 坐标系设置 -->
+    <arg name="frame_id" value="tb3_1/base_footprint"/>
+    <arg name="odom_frame_id" value="tb3_1/odom"/>
+    <arg name="rgb_topic" value="/tb3_1/camera/rgb/image_raw"/>
+    <arg name="depth_topic" value="/tb3_1/camera/depth/image_raw"/>
+    <arg name="camera_info_topic" value="/tb3_1/camera/rgb/camera_info"/>
+    <arg name="depth_camera_info_topic" value="/tb3_1/camera/depth/camera_info"/>
+
+    <!-- 使用 bag 里的里程计，关闭自带的视觉里程计 -->
+    <arg name="visual_odometry" value="false"/>
+    <arg name="odom_topic" value="/tb3_1/odom"/>
+
+    <!-- 不需要激光，只用 RGB-D + IMU 也可以 -->
+    <arg name="subscribe_scan" value="false"/>
+
+    <!-- 输出数据库路径 -->
+    <arg name="database_path" value="$(find turtlebot3_central)/db/tb3_1.db"/>
+    </include>
+    </launch>

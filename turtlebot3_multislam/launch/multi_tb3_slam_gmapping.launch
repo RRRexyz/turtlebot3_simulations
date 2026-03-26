@@ -7,6 +7,11 @@
             <arg name="map_frame"  value="tb3_1/map"/>
             <arg name="ns" value="tb3_1"/>
         </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_1" />
+            <param name="other_robots" value="tb3_2,tb3_3" />
+        </node>
     </group>
 
     <group ns="tb3_2">
@@ -17,6 +22,11 @@
             <arg name="map_frame"  value="tb3_2/map"/>
             <arg name="ns" value="tb3_2"/>
         </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_2" />
+            <param name="other_robots" value="tb3_1,tb3_3" />
+        </node>
     </group>
 
     <group ns="tb3_3">
@@ -27,5 +37,10 @@
             <arg name="map_frame"  value="tb3_3/map"/>
             <arg name="ns" value="tb3_3"/>
         </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_3" />
+            <param name="other_robots" value="tb3_1,tb3_2" />
+        </node>
     </group>
 </launch>

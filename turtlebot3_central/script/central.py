@@ -127,7 +127,7 @@ class FrontierExplorer:
                                             queue.append((nx, ny))
 
                         # 3. 过滤并计算中心点
-                        if len(cluster) > 15: # 阈值，忽略小簇
+                        if len(cluster) > 10: # 阈值，忽略小簇
                             # 计算平均坐标
                             avg_x = np.mean([p[0] for p in cluster])
                             avg_y = np.mean([p[1] for p in cluster])

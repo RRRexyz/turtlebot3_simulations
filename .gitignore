@@ -1,2 +1,9 @@
 *.db
 *.bag
+*.pcd
+*.csv
+*.png
+*.ply
+__pycache__/
+*.log
+*.json

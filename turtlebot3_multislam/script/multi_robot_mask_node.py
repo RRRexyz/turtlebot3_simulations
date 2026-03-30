@@ -29,13 +29,26 @@ class MultiRobotMaskNode:
         filtered = LaserScan()
         filtered.header = msg.header
         filtered.angle_min = msg.angle_min
-        filtered.angle_max = msg.angle_max
         filtered.angle_increment = msg.angle_increment
         filtered.time_increment = msg.time_increment
         filtered.scan_time = msg.scan_time
         filtered.range_min = msg.range_min
         filtered.range_max = msg.range_max
         filtered.ranges = list(msg.ranges)
+        filtered.intensities = list(msg.intensities)
+
+        # Gazebo's full-circle scan can be off by one beam relative to the
+        # count Karto expects. Normalize the outgoing scan for slam_toolbox.
+        expected_count = int(round((msg.angle_max - msg.angle_min) / msg.angle_increment))
+        if expected_count > 0 and len(filtered.ranges) == expected_count + 1:
+            filtered.ranges = filtered.ranges[:expected_count]
+            if filtered.intensities:
+                filtered.intensities = filtered.intensities[:expected_count]
+
+        if filtered.ranges:
+            filtered.angle_max = filtered.angle_min + len(filtered.ranges) * filtered.angle_increment
+        else:
+            filtered.angle_max = msg.angle_max
 
         other_positions = []
         for frame in self.other_frames:

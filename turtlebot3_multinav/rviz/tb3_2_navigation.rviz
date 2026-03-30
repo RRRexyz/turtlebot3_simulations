@@ -196,7 +196,7 @@ Visualization Manager:
       Draw Behind: false
       Enabled: true
       Name: Map
-      Topic: /map
+      Topic: /tb3_2/map
       Unreliable: false
       Use Timestamp: false
       Value: true

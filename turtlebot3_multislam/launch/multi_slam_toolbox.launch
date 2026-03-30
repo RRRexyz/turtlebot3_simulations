@@ -1,0 +1,75 @@
+<launch>
+    <arg name="x_pos_1" default="-7.0"/>
+    <arg name="y_pos_1" default="-1.0"/>
+    <arg name="z_pos_1" default="0.0"/>
+    <arg name="yaw_1" default="1.57"/>
+
+    <arg name="x_pos_2" default="7.0"/>
+    <arg name="y_pos_2" default="-2.0"/>
+    <arg name="z_pos_2" default="0.0"/>
+    <arg name="yaw_2" default="1.57"/>
+
+    <arg name="x_pos_3" default="0.5"/>
+    <arg name="y_pos_3" default="3.0"/>
+    <arg name="z_pos_3" default="0.0"/>
+    <arg name="yaw_3" default="0.0"/>
+
+    <group ns="tb3_1">
+        <include file="$(find turtlebot3_multislam)/launch/turtlebot3_slam_toolbox.launch">
+            <!-- important: All TF frames should be in namespaces-->
+            <arg name="base_frame" value="tb3_1/base_footprint"/>
+            <arg name="odom_frame" value="tb3_1/odom"/>
+            <arg name="map_frame"  value="tb3_1/map"/>
+            <arg name="map_topic" value="/tb3_1/map"/>
+            <arg name="scan_topic" value="/tb3_1/scan_filtered"/>
+            <arg name="ns" value="tb3_1"/>
+        </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_1" />
+            <param name="other_robots" value="tb3_2,tb3_3" />
+        </node>
+    </group>
+
+    <group ns="tb3_2">
+        <include file="$(find turtlebot3_multislam)/launch/turtlebot3_slam_toolbox.launch">
+            <!-- important: All TF frames should be in namespaces-->
+            <arg name="base_frame" value="tb3_2/base_footprint"/>
+            <arg name="odom_frame" value="tb3_2/odom"/>
+            <arg name="map_frame"  value="tb3_2/map"/>
+            <arg name="map_topic" value="/tb3_2/map"/>
+            <arg name="scan_topic" value="/tb3_2/scan_filtered"/>
+            <arg name="ns" value="tb3_2"/>
+        </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_2" />
+            <param name="other_robots" value="tb3_1,tb3_3" />
+        </node>
+    </group>
+
+    <group ns="tb3_3">
+        <include file="$(find turtlebot3_multislam)/launch/turtlebot3_slam_toolbox.launch">
+            <!-- important: All TF frames should be in namespaces-->
+            <arg name="base_frame" value="tb3_3/base_footprint"/>
+            <arg name="odom_frame" value="tb3_3/odom"/>
+            <arg name="map_frame"  value="tb3_3/map"/>
+            <arg name="map_topic" value="/tb3_3/map"/>
+            <arg name="scan_topic" value="/tb3_3/scan_filtered"/>
+            <arg name="ns" value="tb3_3"/>
+        </include>
+
+        <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+            <param name="robot_namespace" value="tb3_3" />
+            <param name="other_robots" value="tb3_1,tb3_2" />
+        </node>
+    </group>
+
+    <!-- Anchor each local SLAM map in a shared world frame using the known spawn poses. -->
+    <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_1_map"
+          args="$(arg x_pos_1) $(arg y_pos_1) $(arg z_pos_1) $(arg yaw_1) 0 0 world tb3_1/map 100"/>
+    <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_2_map"
+          args="$(arg x_pos_2) $(arg y_pos_2) $(arg z_pos_2) $(arg yaw_2) 0 0 world tb3_2/map 100"/>
+    <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_3_map"
+          args="$(arg x_pos_3) $(arg y_pos_3) $(arg z_pos_3) $(arg yaw_3) 0 0 world tb3_3/map 100"/>
+</launch>

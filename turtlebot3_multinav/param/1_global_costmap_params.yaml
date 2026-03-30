@@ -1,5 +1,5 @@
 global_costmap:
-  global_frame: map
+  global_frame: tb3_1/map
   robot_base_frame: tb3_1/base_footprint
 
   update_frequency: 10.0

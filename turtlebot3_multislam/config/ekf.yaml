@@ -1,0 +1,20 @@
+frequency: 30
+sensor_timeout: 0.1
+two_d_mode: true
+publish_tf: true
+publish_acceleration: false
+print_diagnostics: true
+
+odom_frame: $(arg odom_frame)
+base_link_frame: $(arg base_frame)
+world_frame: $(arg odom_frame)
+
+odom0: $(arg odom_topic)
+odom0_queue_size: 10
+odom0_differential: false
+odom0_relative: false
+odom0_config: [false, false, false,
+               false, false, false,
+               true,  true,  false,
+               false, false, true,
+               false, false, false]

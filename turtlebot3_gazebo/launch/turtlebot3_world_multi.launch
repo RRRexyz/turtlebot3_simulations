@@ -55,4 +55,14 @@
     </node>
     <node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf" args="-urdf -model turtlebot3_$(arg model)_3 -x $(arg x_pos_3) -y $(arg y_pos_3) -z $(arg z_pos_3) -Y $(arg yaw_3) -param robot_description" />
   </group>
+
+  <node pkg="tf" type="static_transform_publisher"
+        name="global_to_tb3_1_map_tf_broadcaster"
+        args="$(arg x_pos_1) $(arg y_pos_1) $(arg z_pos_1) 0 0 $(arg yaw_1) /global_map /tb3_1/map 100"/>
+  <node pkg="tf" type="static_transform_publisher"
+        name="global_to_tb3_2_map_tf_broadcaster"
+        args="$(arg x_pos_2) $(arg y_pos_2) $(arg z_pos_2) 0 0 $(arg yaw_2) /global_map /tb3_2/map 100"/>
+  <node pkg="tf" type="static_transform_publisher"
+        name="global_to_tb3_3_map_tf_broadcaster"
+        args="$(arg x_pos_3) $(arg y_pos_3) $(arg z_pos_3) 0 0 $(arg yaw_3) /global_map /tb3_3/map 100"/>
 </launch>

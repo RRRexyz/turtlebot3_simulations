@@ -4,6 +4,7 @@ import tf
 import math
 from sensor_msgs.msg import LaserScan
 
+
 class MultiRobotMaskNode:
     def __init__(self):
         rospy.init_node('multi_robot_mask_node')
@@ -102,6 +103,7 @@ class MultiRobotMaskNode:
             rospy.loginfo_throttle(1.0, f"({self.ns}) Masked {masked_count} points corresponding to other robots.")
 
         self.pub.publish(filtered)
+
 
 if __name__ == '__main__':
     node = MultiRobotMaskNode()

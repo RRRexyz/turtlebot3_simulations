@@ -18,38 +18,12 @@
   <arg name="third_tb3_z_pos" default="0.0"/>
   <arg name="third_tb3_yaw"   default="0.0"/>
 
-  <group ns="$(arg first_tb3)/map_merge">
-    <!-- Gazebo publishes odom from world, so map_merge should not re-apply spawn offsets here. -->
-    <param name="init_pose_x"   value="0.0"/>
-    <param name="init_pose_y"   value="0.0"/>
-    <param name="init_pose_z"   value="0.0"/>
-    <param name="init_pose_yaw" value="0.0"/>
-  </group>
-
-  <group ns="$(arg second_tb3)/map_merge">
-    <param name="init_pose_x"   value="0.0"/>
-    <param name="init_pose_y"   value="0.0"/>
-    <param name="init_pose_z"   value="0.0"/>
-    <param name="init_pose_yaw" value="0.0"/>
-  </group>
-
-  <group ns="$(arg third_tb3)/map_merge">
-    <param name="init_pose_x"   value="0.0"/>
-    <param name="init_pose_y"   value="0.0"/>
-    <param name="init_pose_z"   value="0.0"/>
-    <param name="init_pose_yaw" value="0.0"/>
-  </group>
-
-  <node pkg="multirobot_map_merge" type="map_merge" respawn="false" name="map_merge" output="screen">
+  <node pkg="turtlebot3_central" type="global_map_fuser.py" name="global_map_fuser" output="screen">
+    <rosparam param="robot_namespaces">[tb3_1, tb3_2, tb3_3]</rosparam>
     <param name="robot_map_topic" value="map"/>
-    <param name="robot_namespace" value="tb3"/>
-    <param name="merged_map_topic" value="map"/>
-    <param name="world_frame" value="map"/>
-    <param name="known_init_poses" value="true"/>
-    <param name="merging_rate" value="0.5"/>
-    <param name="discovery_rate" value="0.05"/>
-    <param name="estimation_rate" value="0.1"/>
-    <param name="estimation_confidence" value="1.0"/>
+    <param name="global_frame" value="map"/>
+    <param name="resolution" value="0.05"/>
+    <param name="publish_rate" value="1.0"/>
   </node>
   <!-- Provide a global /map root for visualization. With Gazebo odom sourced from world,
        the local SLAM maps are already world-aligned enough that these anchors should stay identity. -->

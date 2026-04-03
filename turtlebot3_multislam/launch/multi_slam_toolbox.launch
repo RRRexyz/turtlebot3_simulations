@@ -65,11 +65,14 @@
         </node>
     </group>
 
-    <!-- Anchor each local SLAM map in a shared world frame using the known spawn poses. -->
+    <!-- Gazebo odom already tracks robots in world coordinates, so anchoring local map frames here
+         would apply the spawn offset twice. Keep local SLAM maps free and let map_merge handle fusion. -->
+    <!--
     <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_1_map"
-          args="$(arg x_pos_1) $(arg y_pos_1) $(arg z_pos_1) $(arg yaw_1) 0 0 world tb3_1/map 100"/>
+          args="$(arg x_pos_1) $(arg y_pos_1) $(arg z_pos_1) $(arg yaw_1) 0 0 map tb3_1/map 100"/>
     <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_2_map"
-          args="$(arg x_pos_2) $(arg y_pos_2) $(arg z_pos_2) $(arg yaw_2) 0 0 world tb3_2/map 100"/>
+          args="$(arg x_pos_2) $(arg y_pos_2) $(arg z_pos_2) $(arg yaw_2) 0 0 map tb3_2/map 100"/>
     <node pkg="tf" type="static_transform_publisher" name="world_to_tb3_3_map"
-          args="$(arg x_pos_3) $(arg y_pos_3) $(arg z_pos_3) $(arg yaw_3) 0 0 world tb3_3/map 100"/>
+          args="$(arg x_pos_3) $(arg y_pos_3) $(arg z_pos_3) $(arg yaw_3) 0 0 map tb3_3/map 100"/>
+    -->
 </launch>

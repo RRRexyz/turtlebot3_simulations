@@ -1,0 +1,28 @@
+global_map_topic: /map
+global_frame: map
+robot_namespaces: [tb3_1, tb3_2, tb3_3]
+base_frame_suffix: base_footprint
+
+assignment_distance_weight: 1.0
+assignment_information_gain_weight: 1.5
+assignment_conflict_penalty_weight: 3.0
+assignment_conflict_distance: 1.5
+
+make_plan_wait_timeout: 0.2
+plan_tolerance: 0.2
+min_plan_poses: 2
+validation_robot_limit: 2
+
+goal_blacklist_timeout: 45.0
+goal_blacklist_radius: 0.8
+
+no_gain_min_cells: 20
+max_no_gain_attempts: 3
+frontier_retirement_radius: 0.8
+
+stopping_condition_enabled: true
+stop_confirm_cycles: 8
+map_growth_window_sec: 15.0
+known_cells_growth_abs_threshold: 80
+known_cells_growth_ratio_threshold: 0.005
+max_exploration_runtime_sec: 1800.0

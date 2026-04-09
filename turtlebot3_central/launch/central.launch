@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config_file" default="$(find turtlebot3_central)/config/central.yaml"/>
+
+  <node pkg="turtlebot3_central" type="central.py" name="frontier_explorer" output="screen">
+    <rosparam command="load" file="$(arg config_file)"/>
+  </node>
+</launch>

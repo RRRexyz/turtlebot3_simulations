@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 import rospy
 from nav_msgs.msg import OccupancyGrid
-from tf import TransformListener
-from tf.transformations import euler_from_quaternion
+from tf import TransformBroadcaster, TransformListener
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 
 @dataclass
@@ -24,12 +24,19 @@ class GlobalMapFuser:
         self.odom_frame_suffix = rospy.get_param("~odom_frame_suffix", "odom")
         self.global_frame = rospy.get_param("~global_frame", "map")
         self.publish_rate = float(rospy.get_param("~publish_rate", 1.0))
+        self.tf_publish_rate = float(rospy.get_param("~tf_publish_rate", 30.0))
+        self.tf_time_offset = float(rospy.get_param("~tf_time_offset", 0.1))
         self.output_resolution = float(rospy.get_param("~resolution", 0.05))
         self.occupied_threshold = int(rospy.get_param("~occupied_threshold", 50))
+        self.publish_tf = bool(rospy.get_param("~publish_tf", True))
+        self.canvas_padding = float(rospy.get_param("~canvas_padding", 1.0))
+        self.canvas_expand_trigger = float(rospy.get_param("~canvas_expand_trigger", 0.5))
 
         self.tf_listener = TransformListener()
+        self.tf_broadcaster = TransformBroadcaster() if self.publish_tf else None
         self.latest_maps = {}
         self.subscribers = []
+        self.canvas_bounds = None
 
         for namespace in self.robot_namespaces:
             topic = f"/{namespace}/{self.map_topic.lstrip('/')}"
@@ -37,6 +44,8 @@ class GlobalMapFuser:
             self.subscribers.append(subscriber)
 
         self.publisher = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=True)
+        if self.publish_tf:
+            rospy.Timer(rospy.Duration(max(1.0 / self.tf_publish_rate, 0.02)), self._tf_timer_callback)
         rospy.Timer(rospy.Duration(max(1.0 / self.publish_rate, 0.1)), self._timer_callback)
 
     @staticmethod
@@ -96,6 +105,19 @@ class GlobalMapFuser:
         )
         return self._compose_pose2d(global_to_map, origin_pose)
 
+    def _publish_map_registration_tf(self, namespace, global_to_map):
+        if self.tf_broadcaster is None:
+            return
+
+        quaternion = quaternion_from_euler(0.0, 0.0, global_to_map.theta)
+        self.tf_broadcaster.sendTransform(
+            (global_to_map.x, global_to_map.y, 0.0),
+            quaternion,
+            rospy.Time.now() + rospy.Duration(self.tf_time_offset),
+            f"{namespace}/{self.map_frame_suffix}",
+            self.global_frame,
+        )
+
     def _transform_cell_to_global(self, origin_pose, resolution, cell_x, cell_y):
         local_x = (cell_x + 0.5) * resolution
         local_y = (cell_y + 0.5) * resolution
@@ -130,7 +152,61 @@ class GlobalMapFuser:
 
         return min_x, min_y, max_x, max_y
 
-    def _timer_callback(self, _event):
+    def _snap_floor(self, value, resolution):
+        return math.floor(value / resolution) * resolution
+
+    def _snap_ceil(self, value, resolution):
+        return math.ceil(value / resolution) * resolution
+
+    def _build_canvas_bounds(self, min_x, min_y, max_x, max_y, resolution):
+        padding = max(0.0, self.canvas_padding)
+        return (
+            self._snap_floor(min_x - padding, resolution),
+            self._snap_floor(min_y - padding, resolution),
+            self._snap_ceil(max_x + padding, resolution),
+            self._snap_ceil(max_y + padding, resolution),
+        )
+
+    def _update_canvas_bounds(self, observed_bounds, resolution):
+        observed_min_x, observed_min_y, observed_max_x, observed_max_y = observed_bounds
+
+        if self.canvas_bounds is None:
+            self.canvas_bounds = self._build_canvas_bounds(
+                observed_min_x, observed_min_y, observed_max_x, observed_max_y, resolution
+            )
+            rospy.loginfo(
+                "Initialized fused map canvas: min=(%.2f, %.2f) max=(%.2f, %.2f)",
+                self.canvas_bounds[0], self.canvas_bounds[1], self.canvas_bounds[2], self.canvas_bounds[3]
+            )
+            return self.canvas_bounds
+
+        min_x, min_y, max_x, max_y = self.canvas_bounds
+        trigger = max(0.0, self.canvas_expand_trigger)
+        expanded = False
+
+        if observed_min_x < (min_x + trigger):
+            min_x = self._snap_floor(observed_min_x - self.canvas_padding, resolution)
+            expanded = True
+        if observed_min_y < (min_y + trigger):
+            min_y = self._snap_floor(observed_min_y - self.canvas_padding, resolution)
+            expanded = True
+        if observed_max_x > (max_x - trigger):
+            max_x = self._snap_ceil(observed_max_x + self.canvas_padding, resolution)
+            expanded = True
+        if observed_max_y > (max_y - trigger):
+            max_y = self._snap_ceil(observed_max_y + self.canvas_padding, resolution)
+            expanded = True
+
+        if expanded:
+            self.canvas_bounds = (min_x, min_y, max_x, max_y)
+            rospy.loginfo(
+                "Expanded fused map canvas: min=(%.2f, %.2f) max=(%.2f, %.2f)",
+                min_x, min_y, max_x, max_y
+            )
+
+        return self.canvas_bounds
+
+    def _collect_map_states(self, publish_tf=False):
         map_states = []
         for namespace in self.robot_namespaces:
             map_message = self.latest_maps.get(namespace)
@@ -141,13 +217,23 @@ class GlobalMapFuser:
             except Exception as error:
                 rospy.logwarn_throttle(5.0, f"Failed to resolve registration for {namespace}: {error}")
                 continue
+            if publish_tf:
+                self._publish_map_registration_tf(namespace, global_to_map)
             map_states.append((namespace, map_message, self._map_origin_in_global(global_to_map, map_message)))
+        return map_states
+
+    def _tf_timer_callback(self, _event):
+        self._collect_map_states(publish_tf=True)
+
+    def _timer_callback(self, _event):
+        map_states = self._collect_map_states(publish_tf=False)
 
         if not map_states:
             return
 
-        min_x, min_y, max_x, max_y = self._compute_bounds(map_states)
         resolution = self.output_resolution if self.output_resolution > 0.0 else map_states[0][1].info.resolution
+        observed_bounds = self._compute_bounds(map_states)
+        min_x, min_y, max_x, max_y = self._update_canvas_bounds(observed_bounds, resolution)
         width = max(1, int(math.ceil((max_x - min_x) / resolution)))
         height = max(1, int(math.ceil((max_y - min_y) / resolution)))
 

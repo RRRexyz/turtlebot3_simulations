@@ -47,7 +47,14 @@ class MultiRobotMaskNode:
                 filtered.intensities = filtered.intensities[:expected_count]
 
         if filtered.ranges:
-            filtered.angle_max = filtered.angle_min + len(filtered.ranges) * filtered.angle_increment
+            # LaserScan semantics use the angle of the last valid beam, not
+            # the end-exclusive bound. Keeping angle_max one increment too far
+            # makes Karto/slam_toolbox see an inconsistent scan geometry and
+            # can gradually warp the map over time.
+            filtered.angle_max = (
+                filtered.angle_min +
+                (len(filtered.ranges) - 1) * filtered.angle_increment
+            )
         else:
             filtered.angle_max = msg.angle_max
 

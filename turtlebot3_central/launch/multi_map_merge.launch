@@ -24,15 +24,10 @@
     <param name="global_frame" value="map"/>
     <param name="resolution" value="0.05"/>
     <param name="publish_rate" value="1.0"/>
+    <param name="tf_publish_rate" value="30.0"/>
+    <param name="tf_time_offset" value="0.1"/>
+    <param name="publish_tf" value="true"/>
   </node>
-  <!-- Provide a global /map root for visualization. With Gazebo odom sourced from world,
-       the local SLAM maps are already world-aligned enough that these anchors should stay identity. -->
-  <node pkg="tf" type="static_transform_publisher" name="world_to_$(arg first_tb3)_tf_broadcaster"
-        args="0 0 0 0 0 0 /map /$(arg first_tb3)/map 100"/>
-  <node pkg="tf" type="static_transform_publisher" name="world_to_$(arg second_tb3)_tf_broadcaster"
-        args="0 0 0 0 0 0 /map /$(arg second_tb3)/map 100"/>
-  <node pkg="tf" type="static_transform_publisher" name="world_to_$(arg third_tb3)_tf_broadcaster"
-        args="0 0 0 0 0 0 /map /$(arg third_tb3)/map 100"/>
 
   <arg name="open_rviz" default="true"/>
   <group if="$(arg open_rviz)"> 

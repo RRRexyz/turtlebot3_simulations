@@ -8,7 +8,10 @@ project(turtlebot3_central)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  actionlib
+  actionlib_msgs
   geometry_msgs
+  move_base_msgs
   nav_msgs
   rospy
   tf
@@ -104,7 +107,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
- CATKIN_DEPENDS geometry_msgs nav_msgs rospy tf
+ CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs move_base_msgs nav_msgs rospy tf
 #  DEPENDS system_lib
 )
 
@@ -159,8 +162,8 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
+  script/central.py
   script/global_map_fuser.py
-  script/old_central.py
   script/test_central.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
@@ -187,11 +190,11 @@ catkin_install_python(PROGRAMS
 # )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+install(DIRECTORY
+  launch
+  config
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 #############
 ## Testing ##

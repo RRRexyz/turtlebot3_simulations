@@ -714,6 +714,7 @@ class TaskAssigner:
 class StoppingConditionEvaluator:
     def __init__(self):
         self.enabled = bool(rospy.get_param("~stopping_condition_enabled", True))
+        self.manual_stop_requested = False
         self.stop_confirm_cycles = int(rospy.get_param("~stop_confirm_cycles", 8))
         self.map_growth_window_sec = float(rospy.get_param("~map_growth_window_sec", 15.0))
         self.known_cells_growth_abs_threshold = int(
@@ -730,6 +731,11 @@ class StoppingConditionEvaluator:
         self.finished = False
         self.finish_reason = ""
         self.start_time_sec = rospy.Time.now().to_sec()
+
+    def request_manual_stop(self):
+        self.manual_stop_requested = True
+        self.finished = True
+        self.finish_reason = "manual_stop_requested"
 
     def update(self, valid_frontiers, all_idle, known_cells, current_time_sec, raw_frontier_count=0):
         if self.finished:
@@ -815,6 +821,7 @@ class StoppingConditionEvaluator:
 
 if __name__ == "__main__":
     rospy.init_node("frontier_explorer")
+    rospy.set_param("~manual_stop_requested", False)
     
     # 初始化探索器和控制器
     explorer = FrontierExplorer()
@@ -855,6 +862,10 @@ if __name__ == "__main__":
             current_time_sec = rospy.Time.now().to_sec()
             current_known_area = explorer.get_known_area()
             task_assigner.update_known_area(current_known_area)
+            manual_stop_requested = bool(rospy.get_param("~manual_stop_requested", False))
+            if manual_stop_requested and not stopping_evaluator.finished:
+                rospy.logwarn("Manual stop requested. Cancelling exploration and all active goals.")
+                stopping_evaluator.request_manual_stop()
             finished, finish_reason, stop_debug = stopping_evaluator.update(
                 valid_frontiers=valid_frontiers,
                 all_idle=all_idle,

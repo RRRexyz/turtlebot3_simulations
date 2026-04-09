@@ -21,6 +21,7 @@ max_no_gain_attempts: 3
 frontier_retirement_radius: 0.8
 
 stopping_condition_enabled: true
+manual_stop_requested: false
 stop_confirm_cycles: 8
 map_growth_window_sec: 15.0
 known_cells_growth_abs_threshold: 80

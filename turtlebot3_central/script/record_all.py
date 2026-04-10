@@ -8,6 +8,7 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
     scripts_to_run = [
+        os.path.join(script_dir, "common.sh"),
         os.path.join(script_dir, "1.sh"),
         os.path.join(script_dir, "2.sh"),
         os.path.join(script_dir, "3.sh")

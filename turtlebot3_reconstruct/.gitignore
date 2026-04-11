@@ -1,0 +1,12 @@
+recon/__pycache__/
+recon/*.pyc
+output/*.db
+output/*_cloud.ply
+output/*_poses.txt
+output/*_camera_poses.txt
+output/local_exports_manifest.json
+output/*_registration.json
+output/*_merged.ply
+output/*_local_registration_summary.json
+output/global_model_*.ply
+output/global_model_*.json

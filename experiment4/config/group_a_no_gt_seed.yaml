@@ -1,0 +1,31 @@
+group_name: group_a_no_gt_seed
+display_name: A组：多机器人重建，不使用真值初始外参
+description: 不使用 common.bag 中的 /gazebo/model_states，只依赖轨迹种子或点云全局配准求初始外参，再执行局部 ICP。
+
+target_robot: tb3_1
+source_robots:
+  - tb3_2
+  - tb3_3
+
+registration:
+  enabled: true
+  use_gt_seed: false
+  disable_overlap_crop: false
+  disable_icp_refinement: false
+  voxel_size: 0.05
+  max_correspondence_distance: 0.15
+  fitness_threshold: 0.30
+  pose_match_radius: 0.75
+  min_pose_correspondences: 8
+  gt_match_max_dt: 0.05
+  overlap_crop_distance: 0.30
+  min_overlap_points: 200
+
+global_fusion:
+  voxel_size: 0.03
+  outlier_nb_neighbors: 30
+  outlier_std_ratio: 1.5
+  normal_radius: 0.08
+  poisson_depth: 9
+  mesh_density_quantile: 0.04
+  target_triangle_count: 250000

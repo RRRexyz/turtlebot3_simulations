@@ -1,0 +1,19 @@
+<launch>
+  <arg name="open_rviz" default="true"/>
+
+  <node pkg="turtlebot3_central" type="global_map_fuser.py" name="global_map_fuser" output="screen">
+    <rosparam param="robot_namespaces">[tb3_1]</rosparam>
+    <param name="robot_map_topic" value="map"/>
+    <param name="global_frame" value="map"/>
+    <param name="resolution" value="0.05"/>
+    <param name="publish_rate" value="1.0"/>
+    <param name="tf_publish_rate" value="30.0"/>
+    <param name="tf_time_offset" value="0.1"/>
+    <param name="publish_tf" value="true"/>
+  </node>
+
+  <group if="$(arg open_rviz)">
+    <node pkg="rviz" type="rviz" name="rviz" required="false"
+          args="-d $(find turtlebot3_central)/rviz/map_merge.rviz"/>
+  </group>
+</launch>

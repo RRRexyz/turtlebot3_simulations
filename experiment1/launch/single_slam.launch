@@ -1,0 +1,17 @@
+<launch>
+  <group ns="tb3_1">
+    <include file="$(find turtlebot3_multislam)/launch/turtlebot3_slam_toolbox.launch">
+      <arg name="base_frame" value="tb3_1/base_footprint"/>
+      <arg name="odom_frame" value="tb3_1/odom"/>
+      <arg name="map_frame" value="tb3_1/map"/>
+      <arg name="map_topic" value="/tb3_1/map"/>
+      <arg name="scan_topic" value="/tb3_1/scan_filtered"/>
+      <arg name="ns" value="tb3_1"/>
+    </include>
+
+    <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
+      <param name="robot_namespace" value="tb3_1"/>
+      <param name="other_robots" value=""/>
+    </node>
+  </group>
+</launch>

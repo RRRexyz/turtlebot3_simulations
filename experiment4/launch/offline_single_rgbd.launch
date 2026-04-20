@@ -1,0 +1,61 @@
+<launch>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="robot_name" default="tb3_1"/>
+  <arg name="robot_bag" default="$(find experiment4)/bag/1.bag"/>
+  <arg name="common_bag" default="$(find experiment4)/bag/common.bag"/>
+  <arg name="database_path" default="$(find experiment4)/output/tb3_1.db"/>
+  <arg name="play_rate" default="1.0"/>
+  <arg name="play_start_delay" default="2.0"/>
+  <arg name="rtabmap_viz" default="true"/>
+  <arg name="rviz" default="false"/>
+  <arg name="rtabmap_args" default="--delete_db_on_start"/>
+  <arg name="rtabmap_detection_rate" default="0"/>
+  <arg name="rtabmap_loop_thr" default="0.20"/>
+  <arg name="rgbd_linear_update" default="0.05"/>
+  <arg name="rgbd_angular_update" default="0.05"/>
+  <arg name="rgbd_proximity_by_space" default="false"/>
+  <arg name="rgbd_neighbor_link_refining" default="false"/>
+  <arg name="rgbd_optimize_max_error" default="0.5"/>
+  <arg name="vis_min_inliers" default="20"/>
+  <arg name="approx_sync" default="true"/>
+  <arg name="approx_sync_max_interval" default="0.03"/>
+  <arg name="topic_queue_size" default="10"/>
+  <arg name="sync_queue_size" default="30"/>
+
+  <param if="$(arg use_sim_time)" name="/use_sim_time" value="true"/>
+
+  <node pkg="rosbag" type="play" name="player" output="screen"
+        args="--clock -d $(arg play_start_delay) -r $(arg play_rate) $(arg common_bag) $(arg robot_bag)"/>
+
+  <node pkg="tf" type="static_transform_publisher" name="camera_tf_publisher"
+        args="0.069 -0.047 0.107 -1.57079632679 0 -1.57079632679 $(arg robot_name)/base_footprint camera_rgb_optical_frame 100"/>
+
+  <include file="$(find rtabmap_launch)/launch/rtabmap.launch">
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="rtabmap_viz" value="$(arg rtabmap_viz)"/>
+    <arg name="rviz" value="$(arg rviz)"/>
+    <arg name="args" value="$(arg rtabmap_args)
+                             --Rtabmap/DetectionRate $(arg rtabmap_detection_rate)
+                             --Rtabmap/LoopThr $(arg rtabmap_loop_thr)
+                             --RGBD/LinearUpdate $(arg rgbd_linear_update)
+                             --RGBD/AngularUpdate $(arg rgbd_angular_update)
+                             --RGBD/ProximityBySpace $(arg rgbd_proximity_by_space)
+                             --RGBD/NeighborLinkRefining $(arg rgbd_neighbor_link_refining)
+                             --RGBD/OptimizeMaxError $(arg rgbd_optimize_max_error)
+                             --Vis/MinInliers $(arg vis_min_inliers)"/>
+    <arg name="approx_sync" value="$(arg approx_sync)"/>
+    <arg name="approx_sync_max_interval" value="$(arg approx_sync_max_interval)"/>
+    <arg name="topic_queue_size" value="$(arg topic_queue_size)"/>
+    <arg name="sync_queue_size" value="$(arg sync_queue_size)"/>
+    <arg name="frame_id" value="$(arg robot_name)/base_footprint"/>
+    <arg name="odom_frame_id" value="$(arg robot_name)/odom"/>
+    <arg name="rgb_topic" value="/$(arg robot_name)/camera/rgb/image_raw"/>
+    <arg name="depth_topic" value="/$(arg robot_name)/camera/depth/image_raw"/>
+    <arg name="camera_info_topic" value="/$(arg robot_name)/camera/rgb/camera_info"/>
+    <arg name="depth_camera_info_topic" value="/$(arg robot_name)/camera/depth/camera_info"/>
+    <arg name="visual_odometry" value="false"/>
+    <arg name="odom_topic" value="/$(arg robot_name)/odom"/>
+    <arg name="subscribe_scan" value="false"/>
+    <arg name="database_path" value="$(arg database_path)"/>
+  </include>
+</launch>

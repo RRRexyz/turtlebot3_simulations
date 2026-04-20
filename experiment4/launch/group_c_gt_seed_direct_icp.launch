@@ -1,0 +1,8 @@
+<launch>
+  <arg name="result_root" default="$(find experiment4)/results" />
+  <node pkg="experiment4"
+        type="run_experiment4_batch.py"
+        name="experiment4_group_c_gt_seed_direct_icp"
+        output="screen"
+        args="--group group_c_gt_seed_direct_icp --result-root $(arg result_root)" />
+</launch>

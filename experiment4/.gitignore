@@ -1,0 +1,9 @@
+bag/*.bag
+output/*.db
+output/*.ply
+output/*.txt
+output/*.json
+results/group_*/
+results/batch_summary_*.csv
+results/batch_summary_*.json
+results/figures/

@@ -1,0 +1,28 @@
+<launch>
+  <arg name="result_root" default="$(find experiment1)/results"/>
+  <arg name="run_name" default=""/>
+  <arg name="gui" default="false"/>
+  <arg name="open_rviz" default="true"/>
+
+  <include file="$(find experiment1)/launch/single_world.launch">
+    <arg name="gui" value="$(arg gui)"/>
+  </include>
+  <include file="$(find experiment1)/launch/single_slam.launch"/>
+  <include file="$(find experiment1)/launch/single_navigation.launch">
+    <arg name="open_rviz" value="$(arg open_rviz)"/>
+  </include>
+  <include file="$(find experiment1)/launch/single_map_merge.launch">
+    <arg name="open_rviz" value="$(arg open_rviz)"/>
+  </include>
+
+  <node pkg="experiment1" type="experiment_coordinator.py" name="experiment_coordinator" output="screen">
+    <rosparam command="load" file="$(find experiment1)/config/group_a_single_robot.yaml"/>
+  </node>
+
+  <node pkg="experiment1" type="metrics_recorder.py" name="metrics_recorder" output="screen" required="true">
+    <param name="group_name" value="group_a_single_robot"/>
+    <param name="result_root" value="$(arg result_root)"/>
+    <param name="run_name" value="$(arg run_name)"/>
+    <rosparam param="robot_namespaces">[tb3_1]</rosparam>
+  </node>
+</launch>

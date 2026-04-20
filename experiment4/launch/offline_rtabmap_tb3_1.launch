@@ -1,0 +1,8 @@
+<launch>
+  <include file="$(find experiment4)/launch/offline_single_rgbd.launch">
+    <arg name="robot_name" value="tb3_1"/>
+    <arg name="robot_bag" value="$(find experiment4)/bag/1.bag"/>
+    <arg name="common_bag" value="$(find experiment4)/bag/common.bag"/>
+    <arg name="database_path" value="$(find experiment4)/output/tb3_1.db"/>
+  </include>
+</launch>

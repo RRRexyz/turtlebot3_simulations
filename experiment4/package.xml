@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>experiment4</name>
+  <version>0.0.0</version>
+  <description>Offline 3D reconstruction and registration comparison experiment framework.</description>
+
+  <maintainer email="adminwe@todo.todo">adminwe</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>rosbag</depend>
+  <depend>rospy</depend>
+  <depend>rtabmap_launch</depend>
+  <depend>tf</depend>
+  <depend>turtlebot3_central</depend>
+  <depend>turtlebot3_reconstruct</depend>
+
+  <export>
+  </export>
+</package>

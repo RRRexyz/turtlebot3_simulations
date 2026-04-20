@@ -26,6 +26,7 @@ class PairwiseRegistrationConfig:
     min_pose_correspondences: int = 8
     overlap_crop_distance: float = 0.30
     min_overlap_points: int = 200
+    enable_icp_refinement: bool = True
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=200,
         help="Minimum points per cloud required to trust overlap-cropped ICP.",
+    )
+    parser.add_argument(
+        "--disable-icp-refinement",
+        action="store_true",
+        help="Skip local ICP refinement and keep the coarse transform only.",
     )
     return parser
 
@@ -502,8 +508,88 @@ def select_overlap_subclouds(
     return source_overlap, target_overlap, stats
 
 
+def evaluate_pair_with_uniform_protocol(
+    source_down: o3d.geometry.PointCloud,
+    target_down: o3d.geometry.PointCloud,
+    transform: np.ndarray,
+    max_distance: float,
+    min_overlap_points: int,
+) -> Tuple[Optional[float], Optional[float], bool, Dict[str, float]]:
+    source_points = np.asarray(source_down.points)
+    target_points = np.asarray(target_down.points)
+
+    stats: Dict[str, float] = {
+        "evaluation_distance_threshold": float(max_distance),
+        "evaluation_min_overlap_points": int(min_overlap_points),
+        "evaluation_source_downsampled_points": int(source_points.shape[0]),
+        "evaluation_target_downsampled_points": int(target_points.shape[0]),
+    }
+
+    if source_points.size == 0 or target_points.size == 0:
+        stats["evaluation_overlap_source_points"] = int(source_points.shape[0])
+        stats["evaluation_overlap_target_points"] = int(target_points.shape[0])
+        stats["evaluation_overlap_used"] = False
+        stats["valid_pair"] = False
+        return None, None, False, stats
+
+    source_transformed = (transform[:3, :3] @ source_points.T).T + transform[:3, 3]
+
+    target_tree = cKDTree(target_points)
+    source_distances, _ = target_tree.query(source_transformed, distance_upper_bound=max_distance)
+    source_mask = np.isfinite(source_distances)
+
+    source_tree_in_target_frame = cKDTree(source_transformed)
+    target_distances, _ = source_tree_in_target_frame.query(target_points, distance_upper_bound=max_distance)
+    target_mask = np.isfinite(target_distances)
+
+    overlap_source_count = int(np.sum(source_mask))
+    overlap_target_count = int(np.sum(target_mask))
+    stats["evaluation_overlap_source_points"] = overlap_source_count
+    stats["evaluation_overlap_target_points"] = overlap_target_count
+
+    if overlap_source_count < min_overlap_points or overlap_target_count < min_overlap_points:
+        stats["evaluation_overlap_used"] = False
+        stats["valid_pair"] = False
+        return None, None, False, stats
+
+    source_indices = np.flatnonzero(source_mask).tolist()
+    target_indices = np.flatnonzero(target_mask).tolist()
+    source_overlap = source_down.select_by_index(source_indices)
+    target_overlap = target_down.select_by_index(target_indices)
+    evaluation = evaluate_transform(
+        source_down=source_overlap,
+        target_down=target_overlap,
+        transform=transform,
+        max_distance=max_distance,
+    )
+    stats["evaluation_overlap_used"] = True
+    stats["valid_pair"] = True
+    stats["evaluation_fitness"] = float(evaluation.fitness)
+    stats["evaluation_inlier_rmse"] = float(evaluation.inlier_rmse)
+    return float(evaluation.fitness), float(evaluation.inlier_rmse), True, stats
+
+
 def transform_to_serializable(matrix: np.ndarray) -> List[List[float]]:
     return [[float(value) for value in row] for row in matrix]
+
+
+def rotation_error_degrees(rotation_delta: np.ndarray) -> float:
+    trace_value = float(np.trace(rotation_delta))
+    cosine = max(-1.0, min(1.0, 0.5 * (trace_value - 1.0)))
+    return float(np.degrees(np.arccos(cosine)))
+
+
+def compute_relative_transform_error(
+    estimated_transform: np.ndarray,
+    ground_truth_transform: np.ndarray,
+) -> Dict[str, float]:
+    delta_transform = np.linalg.inv(ground_truth_transform) @ estimated_transform
+    translation_error = float(np.linalg.norm(delta_transform[:3, 3]))
+    rotation_error = rotation_error_degrees(delta_transform[:3, :3])
+    return {
+        "gt_relative_translation_error_m": translation_error,
+        "gt_relative_rotation_error_deg": rotation_error,
+    }
 
 
 def save_transformed_cloud(
@@ -535,6 +621,7 @@ def register_pair(
     output_dir: Path,
     initial_transform_override: Optional[np.ndarray] = None,
     initial_transform_stats: Optional[Dict[str, float]] = None,
+    ground_truth_transform: Optional[np.ndarray] = None,
 ):
     source_pose_points = load_pose_positions(source_export.robot_poses)
     target_pose_points = load_pose_positions(target_export.robot_poses)
@@ -592,29 +679,49 @@ def register_pair(
     pose_stats["initial_fitness"] = float(initial_eval.fitness)
     pose_stats["initial_inlier_rmse"] = float(initial_eval.inlier_rmse)
 
-    icp_result = refine_with_icp(
-        source_down=icp_source_down,
-        target_down=icp_target_down,
-        initial_transform=coarse_transform,
-        max_distance=config.max_correspondence_distance,
-    )
-
-    if (
-        float(icp_result.fitness) > float(initial_eval.fitness) + 1e-6
-        or (
-            abs(float(icp_result.fitness) - float(initial_eval.fitness)) <= 1e-6
-            and float(icp_result.inlier_rmse) < float(initial_eval.inlier_rmse)
-        )
-    ):
-        transform = np.asarray(icp_result.transformation)
-        final_fitness = float(icp_result.fitness)
-        final_rmse = float(icp_result.inlier_rmse)
-        refinement_used = True
-    else:
+    if not config.enable_icp_refinement:
         transform = coarse_transform
-        final_fitness = float(initial_eval.fitness)
-        final_rmse = float(initial_eval.inlier_rmse)
+        optimization_fitness = float(initial_eval.fitness)
+        optimization_rmse = float(initial_eval.inlier_rmse)
         refinement_used = False
+    else:
+        icp_result = refine_with_icp(
+            source_down=icp_source_down,
+            target_down=icp_target_down,
+            initial_transform=coarse_transform,
+            max_distance=config.max_correspondence_distance,
+        )
+
+        if (
+            float(icp_result.fitness) > float(initial_eval.fitness) + 1e-6
+            or (
+                abs(float(icp_result.fitness) - float(initial_eval.fitness)) <= 1e-6
+                and float(icp_result.inlier_rmse) < float(initial_eval.inlier_rmse)
+            )
+        ):
+            transform = np.asarray(icp_result.transformation)
+            optimization_fitness = float(icp_result.fitness)
+            optimization_rmse = float(icp_result.inlier_rmse)
+            refinement_used = True
+        else:
+            transform = coarse_transform
+            optimization_fitness = float(initial_eval.fitness)
+            optimization_rmse = float(initial_eval.inlier_rmse)
+            refinement_used = False
+
+    evaluation_fitness, evaluation_rmse, valid_pair, evaluation_stats = evaluate_pair_with_uniform_protocol(
+        source_down=source_down,
+        target_down=target_down,
+        transform=transform,
+        max_distance=config.max_correspondence_distance,
+        min_overlap_points=config.min_overlap_points,
+    )
+    pose_stats.update(evaluation_stats)
+    if ground_truth_transform is not None:
+        pose_stats["gt_relative_transform_available"] = True
+        pose_stats.update(compute_relative_transform_error(transform, ground_truth_transform))
+    else:
+        pose_stats["gt_relative_transform_available"] = False
 
     pair_prefix = f"{source_export.robot_name}_to_{target_export.robot_name}"
     transformed_cloud_path = output_dir / f"{pair_prefix}_cloud.ply"
@@ -634,8 +741,16 @@ def register_pair(
         "coarse_method": coarse_method,
         "coarse_transform": transform_to_serializable(coarse_transform),
         "transform": transform_to_serializable(transform),
-        "fitness": final_fitness,
-        "inlier_rmse": final_rmse,
+        "ground_truth_transform": (
+            transform_to_serializable(ground_truth_transform)
+            if ground_truth_transform is not None
+            else None
+        ),
+        "fitness": evaluation_fitness,
+        "inlier_rmse": evaluation_rmse,
+        "optimization_fitness": optimization_fitness,
+        "optimization_inlier_rmse": optimization_rmse,
+        "valid_pair": valid_pair,
         "refinement_used": refinement_used,
         "transformed_cloud": str(transformed_cloud_path),
         "merged_cloud": str(merged_cloud_path),
@@ -643,7 +758,12 @@ def register_pair(
         "max_correspondence_distance": config.max_correspondence_distance,
         "overlap_crop_distance": config.overlap_crop_distance,
         "min_overlap_points": config.min_overlap_points,
-        "fit_threshold_ok": bool(final_fitness >= config.fitness_threshold),
+        "enable_icp_refinement": config.enable_icp_refinement,
+        "fit_threshold_ok": bool(
+            valid_pair
+            and evaluation_fitness is not None
+            and evaluation_fitness >= config.fitness_threshold
+        ),
     }
     summary.update(pose_stats)
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
@@ -658,6 +778,7 @@ def run_registration(
     config: PairwiseRegistrationConfig,
     common_bag_path: Optional[Path] = None,
     gt_match_max_dt: float = 0.05,
+    use_ground_truth_seed: bool = True,
 ):
     exports, manifest_output_dir = load_manifest(manifest_path)
     if target_robot not in exports:
@@ -696,7 +817,9 @@ def run_registration(
             "min_pose_correspondences": config.min_pose_correspondences,
             "overlap_crop_distance": config.overlap_crop_distance,
             "min_overlap_points": config.min_overlap_points,
+            "enable_icp_refinement": config.enable_icp_refinement,
             "gt_match_max_dt": gt_match_max_dt,
+            "use_ground_truth_seed": use_ground_truth_seed,
         },
         "ground_truth_alignment": {
             robot_name: {
@@ -716,12 +839,13 @@ def run_registration(
             raise KeyError(f"Source robot {source_robot!r} not found in manifest.")
         print(f"[register] {source_robot} -> {target_robot}")
         initial_transform = None
-        initial_stats = None
+        initial_stats: Dict[str, float] = {}
+        ground_truth_transform = None
         if (
             source_robot in local_to_world_transforms
             and target_robot in local_to_world_transforms
         ):
-            initial_transform = (
+            ground_truth_transform = (
                 np.linalg.inv(local_to_world_transforms[target_robot])
                 @ local_to_world_transforms[source_robot]
             )
@@ -732,6 +856,10 @@ def run_registration(
                 "source_gt_local_to_world_rmse": gt_stats_by_robot[source_robot].get("gt_local_to_world_rmse", float("nan")),
                 "target_gt_local_to_world_rmse": gt_stats_by_robot[target_robot].get("gt_local_to_world_rmse", float("nan")),
             }
+            if use_ground_truth_seed:
+                initial_transform = ground_truth_transform
+        else:
+            initial_stats["gt_seed_available"] = 0.0
         summary = register_pair(
             source_export=exports[source_robot],
             target_export=target_export,
@@ -739,12 +867,22 @@ def run_registration(
             output_dir=destination,
             initial_transform_override=initial_transform,
             initial_transform_stats=initial_stats,
+            ground_truth_transform=ground_truth_transform,
         )
         results["sources"].append(summary)
         if not summary["fit_threshold_ok"]:
+            fitness_text = (
+                f"{summary['fitness']:.4f}"
+                if summary.get("fitness") is not None
+                else "N/A"
+            )
+            reason_text = (
+                "has no valid overlap under the uniform evaluation protocol"
+                if not bool(summary.get("valid_pair", False))
+                else f"is below threshold {config.fitness_threshold:.4f}"
+            )
             print(
-                f"[warn] {source_robot} -> {target_robot} fitness={summary['fitness']:.4f} "
-                f"is below threshold {config.fitness_threshold:.4f}",
+                f"[warn] {source_robot} -> {target_robot} fitness={fitness_text} {reason_text}",
                 file=sys.stderr,
             )
 
@@ -765,6 +903,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         min_pose_correspondences=args.min_pose_correspondences,
         overlap_crop_distance=args.overlap_crop_distance,
         min_overlap_points=args.min_overlap_points,
+        enable_icp_refinement=not args.disable_icp_refinement,
     )
     run_registration(
         manifest_path=args.manifest.expanduser().resolve(),

@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Tuple
 
+from geometry_msgs.msg import Pose, Quaternion
 import rospy
 from nav_msgs.msg import OccupancyGrid
+from rospy.timer import TimerEvent
 from tf import TransformBroadcaster, TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
+Bounds2D = Tuple[float, float, float, float]
+Point2D = Tuple[float, float]
 
 
 @dataclass
@@ -15,47 +23,58 @@ class Pose2D:
     theta: float = 0.0
 
 
-class GlobalMapFuser:
-    def __init__(self):
-        self.robot_namespaces = rospy.get_param("~robot_namespaces", ["tb3_1", "tb3_2", "tb3_3"])
-        self.map_topic = rospy.get_param("~robot_map_topic", "map")
-        self.base_frame_suffix = rospy.get_param("~base_frame_suffix", "base_footprint")
-        self.map_frame_suffix = rospy.get_param("~map_frame_suffix", "map")
-        self.odom_frame_suffix = rospy.get_param("~odom_frame_suffix", "odom")
-        self.global_frame = rospy.get_param("~global_frame", "map")
-        self.publish_rate = float(rospy.get_param("~publish_rate", 1.0))
-        self.tf_publish_rate = float(rospy.get_param("~tf_publish_rate", 30.0))
-        self.tf_time_offset = float(rospy.get_param("~tf_time_offset", 0.1))
-        self.output_resolution = float(rospy.get_param("~resolution", 0.05))
-        self.occupied_threshold = int(rospy.get_param("~occupied_threshold", 50))
-        self.publish_tf = bool(rospy.get_param("~publish_tf", True))
-        self.canvas_padding = float(rospy.get_param("~canvas_padding", 1.0))
-        self.canvas_expand_trigger = float(rospy.get_param("~canvas_expand_trigger", 0.5))
+MapState = Tuple[str, OccupancyGrid, Pose2D]
 
-        self.tf_listener = TransformListener()
-        self.tf_broadcaster = TransformBroadcaster() if self.publish_tf else None
-        self.latest_maps = {}
-        self.subscribers = []
-        self.canvas_bounds = None
+
+class GlobalMapFuser:
+    def __init__(self) -> None:
+        self.robot_namespaces: List[str] = rospy.get_param(
+            "~robot_namespaces", ["tb3_1", "tb3_2", "tb3_3"]
+        )
+        self.map_topic: str = rospy.get_param("~robot_map_topic", "map")
+        self.base_frame_suffix: str = rospy.get_param("~base_frame_suffix", "base_footprint")
+        self.map_frame_suffix: str = rospy.get_param("~map_frame_suffix", "map")
+        self.odom_frame_suffix: str = rospy.get_param("~odom_frame_suffix", "odom")
+        self.global_frame: str = rospy.get_param("~global_frame", "map")
+        self.publish_rate: float = float(rospy.get_param("~publish_rate", 1.0))
+        self.tf_publish_rate: float = float(rospy.get_param("~tf_publish_rate", 30.0))
+        self.tf_time_offset: float = float(rospy.get_param("~tf_time_offset", 0.1))
+        self.output_resolution: float = float(rospy.get_param("~resolution", 0.05))
+        self.occupied_threshold: int = int(rospy.get_param("~occupied_threshold", 50))
+        self.publish_tf: bool = bool(rospy.get_param("~publish_tf", True))
+        self.canvas_padding: float = float(rospy.get_param("~canvas_padding", 1.0))
+        self.canvas_expand_trigger: float = float(rospy.get_param("~canvas_expand_trigger", 0.5))
+
+        self.tf_listener: TransformListener = TransformListener()
+        self.tf_broadcaster: Optional[TransformBroadcaster] = (
+            TransformBroadcaster() if self.publish_tf else None
+        )
+        self.latest_maps: Dict[str, OccupancyGrid] = {}
+        self.subscribers: List[rospy.Subscriber] = []
+        self.canvas_bounds: Optional[Bounds2D] = None
 
         for namespace in self.robot_namespaces:
-            topic = f"/{namespace}/{self.map_topic.lstrip('/')}"
-            subscriber = rospy.Subscriber(topic, OccupancyGrid, self._make_map_callback(namespace), queue_size=1)
+            topic: str = f"/{namespace}/{self.map_topic.lstrip('/')}"
+            subscriber: rospy.Subscriber = rospy.Subscriber(
+                topic, OccupancyGrid, self._make_map_callback(namespace), queue_size=1
+            )
             self.subscribers.append(subscriber)
 
-        self.publisher = rospy.Publisher("/map", OccupancyGrid, queue_size=1, latch=True)
+        self.publisher: rospy.Publisher = rospy.Publisher(
+            "/map", OccupancyGrid, queue_size=1, latch=True
+        )
         if self.publish_tf:
             rospy.Timer(rospy.Duration(max(1.0 / self.tf_publish_rate, 0.02)), self._tf_timer_callback)
         rospy.Timer(rospy.Duration(max(1.0 / self.publish_rate, 0.1)), self._timer_callback)
 
     @staticmethod
-    def _normalize_angle(theta):
+    def _normalize_angle(theta: float) -> float:
         return math.atan2(math.sin(theta), math.cos(theta))
 
     @classmethod
-    def _compose_pose2d(cls, lhs, rhs):
-        lhs_cos = math.cos(lhs.theta)
-        lhs_sin = math.sin(lhs.theta)
+    def _compose_pose2d(cls, lhs: Pose2D, rhs: Pose2D) -> Pose2D:
+        lhs_cos: float = math.cos(lhs.theta)
+        lhs_sin: float = math.sin(lhs.theta)
         return Pose2D(
             x=lhs.x + lhs_cos * rhs.x - lhs_sin * rhs.y,
             y=lhs.y + lhs_sin * rhs.x + lhs_cos * rhs.y,
@@ -63,9 +82,9 @@ class GlobalMapFuser:
         )
 
     @classmethod
-    def _inverse_pose2d(cls, pose):
-        pose_cos = math.cos(pose.theta)
-        pose_sin = math.sin(pose.theta)
+    def _inverse_pose2d(cls, pose: Pose2D) -> Pose2D:
+        pose_cos: float = math.cos(pose.theta)
+        pose_sin: float = math.sin(pose.theta)
         return Pose2D(
             x=-pose_cos * pose.x - pose_sin * pose.y,
             y=pose_sin * pose.x - pose_cos * pose.y,
@@ -73,43 +92,50 @@ class GlobalMapFuser:
         )
 
     @staticmethod
-    def _quaternion_to_yaw(quaternion):
+    def _quaternion_to_yaw(quaternion: Quaternion) -> float:
+        yaw: float
         _, _, yaw = euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])
         return yaw
 
-    def _make_map_callback(self, namespace):
-        def _callback(message):
+    def _make_map_callback(self, namespace: str) -> Callable[[OccupancyGrid], None]:
+        def _callback(message: OccupancyGrid) -> None:
             self.latest_maps[namespace] = message
+
         return _callback
 
-    def _lookup_pose2d(self, target_frame, source_frame):
+    def _lookup_pose2d(self, target_frame: str, source_frame: str) -> Pose2D:
         self.tf_listener.waitForTransform(target_frame, source_frame, rospy.Time(0), rospy.Duration(0.5))
+        trans: Tuple[float, float, float]
+        rot: Tuple[float, float, float, float]
         trans, rot = self.tf_listener.lookupTransform(target_frame, source_frame, rospy.Time(0))
+        yaw: float
         _, _, yaw = euler_from_quaternion(rot)
         return Pose2D(x=trans[0], y=trans[1], theta=yaw)
 
-    def _lookup_global_to_map(self, namespace):
-        map_frame = f"{namespace}/{self.map_frame_suffix}"
-        odom_frame = f"{namespace}/{self.odom_frame_suffix}"
-        base_frame = f"{namespace}/{self.base_frame_suffix}"
-        global_to_base = self._lookup_pose2d(odom_frame, base_frame)
-        local_map_to_base = self._lookup_pose2d(map_frame, base_frame)
+    def _lookup_global_to_map(self, namespace: str) -> Pose2D:
+        map_frame: str = f"{namespace}/{self.map_frame_suffix}"
+        odom_frame: str = f"{namespace}/{self.odom_frame_suffix}"
+        base_frame: str = f"{namespace}/{self.base_frame_suffix}"
+        global_to_base: Pose2D = self._lookup_pose2d(odom_frame, base_frame)
+        local_map_to_base: Pose2D = self._lookup_pose2d(map_frame, base_frame)
         return self._compose_pose2d(global_to_base, self._inverse_pose2d(local_map_to_base))
 
-    def _map_origin_in_global(self, global_to_map, map_message):
-        origin = map_message.info.origin
-        origin_pose = Pose2D(
+    def _map_origin_in_global(self, global_to_map: Pose2D, map_message: OccupancyGrid) -> Pose2D:
+        origin: Pose = map_message.info.origin
+        origin_pose: Pose2D = Pose2D(
             x=origin.position.x,
             y=origin.position.y,
             theta=self._quaternion_to_yaw(origin.orientation),
         )
         return self._compose_pose2d(global_to_map, origin_pose)
 
-    def _publish_map_registration_tf(self, namespace, global_to_map):
+    def _publish_map_registration_tf(self, namespace: str, global_to_map: Pose2D) -> None:
         if self.tf_broadcaster is None:
             return
 
-        quaternion = quaternion_from_euler(0.0, 0.0, global_to_map.theta)
+        quaternion: Tuple[float, float, float, float] = quaternion_from_euler(
+            0.0, 0.0, global_to_map.theta
+        )
         self.tf_broadcaster.sendTransform(
             (global_to_map.x, global_to_map.y, 0.0),
             quaternion,
@@ -118,27 +144,29 @@ class GlobalMapFuser:
             self.global_frame,
         )
 
-    def _transform_cell_to_global(self, origin_pose, resolution, cell_x, cell_y):
-        local_x = (cell_x + 0.5) * resolution
-        local_y = (cell_y + 0.5) * resolution
-        origin_cos = math.cos(origin_pose.theta)
-        origin_sin = math.sin(origin_pose.theta)
+    def _transform_cell_to_global(
+        self, origin_pose: Pose2D, resolution: float, cell_x: int, cell_y: int
+    ) -> Point2D:
+        local_x: float = (cell_x + 0.5) * resolution
+        local_y: float = (cell_y + 0.5) * resolution
+        origin_cos: float = math.cos(origin_pose.theta)
+        origin_sin: float = math.sin(origin_pose.theta)
         return (
             origin_pose.x + origin_cos * local_x - origin_sin * local_y,
             origin_pose.y + origin_sin * local_x + origin_cos * local_y,
         )
 
-    def _compute_bounds(self, map_states):
-        min_x = float("inf")
-        min_y = float("inf")
-        max_x = float("-inf")
-        max_y = float("-inf")
+    def _compute_bounds(self, map_states: List[MapState]) -> Bounds2D:
+        min_x: float = float("inf")
+        min_y: float = float("inf")
+        max_x: float = float("-inf")
+        max_y: float = float("-inf")
 
         for _, map_message, origin_pose in map_states:
-            width = map_message.info.width
-            height = map_message.info.height
-            resolution = map_message.info.resolution
-            corners = [
+            width: int = map_message.info.width
+            height: int = map_message.info.height
+            resolution: float = map_message.info.resolution
+            corners: List[Point2D] = [
                 self._transform_cell_to_global(origin_pose, resolution, 0, 0),
                 self._transform_cell_to_global(origin_pose, resolution, width, 0),
                 self._transform_cell_to_global(origin_pose, resolution, 0, height),
@@ -152,14 +180,16 @@ class GlobalMapFuser:
 
         return min_x, min_y, max_x, max_y
 
-    def _snap_floor(self, value, resolution):
+    def _snap_floor(self, value: float, resolution: float) -> float:
         return math.floor(value / resolution) * resolution
 
-    def _snap_ceil(self, value, resolution):
+    def _snap_ceil(self, value: float, resolution: float) -> float:
         return math.ceil(value / resolution) * resolution
 
-    def _build_canvas_bounds(self, min_x, min_y, max_x, max_y, resolution):
-        padding = max(0.0, self.canvas_padding)
+    def _build_canvas_bounds(
+        self, min_x: float, min_y: float, max_x: float, max_y: float, resolution: float
+    ) -> Bounds2D:
+        padding: float = max(0.0, self.canvas_padding)
         return (
             self._snap_floor(min_x - padding, resolution),
             self._snap_floor(min_y - padding, resolution),
@@ -167,7 +197,11 @@ class GlobalMapFuser:
             self._snap_ceil(max_y + padding, resolution),
         )
 
-    def _update_canvas_bounds(self, observed_bounds, resolution):
+    def _update_canvas_bounds(self, observed_bounds: Bounds2D, resolution: float) -> Bounds2D:
+        observed_min_x: float
+        observed_min_y: float
+        observed_max_x: float
+        observed_max_y: float
         observed_min_x, observed_min_y, observed_max_x, observed_max_y = observed_bounds
 
         if self.canvas_bounds is None:
@@ -180,9 +214,13 @@ class GlobalMapFuser:
             )
             return self.canvas_bounds
 
+        min_x: float
+        min_y: float
+        max_x: float
+        max_y: float
         min_x, min_y, max_x, max_y = self.canvas_bounds
-        trigger = max(0.0, self.canvas_expand_trigger)
-        expanded = False
+        trigger: float = max(0.0, self.canvas_expand_trigger)
+        expanded: bool = False
 
         if observed_min_x < (min_x + trigger):
             min_x = self._snap_floor(observed_min_x - self.canvas_padding, resolution)
@@ -206,14 +244,14 @@ class GlobalMapFuser:
 
         return self.canvas_bounds
 
-    def _collect_map_states(self, publish_tf=False):
-        map_states = []
+    def _collect_map_states(self, publish_tf: bool = False) -> List[MapState]:
+        map_states: List[MapState] = []
         for namespace in self.robot_namespaces:
-            map_message = self.latest_maps.get(namespace)
+            map_message: Optional[OccupancyGrid] = self.latest_maps.get(namespace)
             if map_message is None:
                 continue
             try:
-                global_to_map = self._lookup_global_to_map(namespace)
+                global_to_map: Pose2D = self._lookup_global_to_map(namespace)
             except Exception as error:
                 rospy.logwarn_throttle(5.0, f"Failed to resolve registration for {namespace}: {error}")
                 continue
@@ -222,48 +260,58 @@ class GlobalMapFuser:
             map_states.append((namespace, map_message, self._map_origin_in_global(global_to_map, map_message)))
         return map_states
 
-    def _tf_timer_callback(self, _event):
+    def _tf_timer_callback(self, _event: TimerEvent) -> None:
         self._collect_map_states(publish_tf=True)
 
-    def _timer_callback(self, _event):
-        map_states = self._collect_map_states(publish_tf=False)
+    def _timer_callback(self, _event: TimerEvent) -> None:
+        map_states: List[MapState] = self._collect_map_states(publish_tf=False)
 
         if not map_states:
             return
 
-        resolution = self.output_resolution if self.output_resolution > 0.0 else map_states[0][1].info.resolution
-        observed_bounds = self._compute_bounds(map_states)
+        resolution: float = (
+            self.output_resolution if self.output_resolution > 0.0 else map_states[0][1].info.resolution
+        )
+        observed_bounds: Bounds2D = self._compute_bounds(map_states)
+        min_x: float
+        min_y: float
+        max_x: float
+        max_y: float
         min_x, min_y, max_x, max_y = self._update_canvas_bounds(observed_bounds, resolution)
-        width = max(1, int(math.ceil((max_x - min_x) / resolution)))
-        height = max(1, int(math.ceil((max_y - min_y) / resolution)))
+        width: int = max(1, int(math.ceil((max_x - min_x) / resolution)))
+        height: int = max(1, int(math.ceil((max_y - min_y) / resolution)))
 
-        occupied = [False] * (width * height)
-        free = [False] * (width * height)
+        occupied: List[bool] = [False] * (width * height)
+        free: List[bool] = [False] * (width * height)
 
         for _, map_message, origin_pose in map_states:
-            source_resolution = map_message.info.resolution
-            source_width = map_message.info.width
-            source_height = map_message.info.height
+            source_resolution: float = map_message.info.resolution
+            source_width: int = map_message.info.width
+            source_height: int = map_message.info.height
             for y_index in range(source_height):
-                row_offset = y_index * source_width
+                row_offset: int = y_index * source_width
                 for x_index in range(source_width):
-                    value = map_message.data[row_offset + x_index]
+                    value: int = map_message.data[row_offset + x_index]
                     if value < 0:
                         continue
 
-                    world_x, world_y = self._transform_cell_to_global(origin_pose, source_resolution, x_index, y_index)
-                    global_x = int(math.floor((world_x - min_x) / resolution))
-                    global_y = int(math.floor((world_y - min_y) / resolution))
+                    world_x: float
+                    world_y: float
+                    world_x, world_y = self._transform_cell_to_global(
+                        origin_pose, source_resolution, x_index, y_index
+                    )
+                    global_x: int = int(math.floor((world_x - min_x) / resolution))
+                    global_y: int = int(math.floor((world_y - min_y) / resolution))
                     if global_x < 0 or global_x >= width or global_y < 0 or global_y >= height:
                         continue
 
-                    merged_index = global_y * width + global_x
+                    merged_index: int = global_y * width + global_x
                     if value >= self.occupied_threshold:
                         occupied[merged_index] = True
                     else:
                         free[merged_index] = True
 
-        merged_data = []
+        merged_data: List[int] = []
         for cell_index in range(width * height):
             if occupied[cell_index]:
                 merged_data.append(100)
@@ -272,7 +320,7 @@ class GlobalMapFuser:
             else:
                 merged_data.append(-1)
 
-        merged_map = OccupancyGrid()
+        merged_map: OccupancyGrid = OccupancyGrid()
         merged_map.header.stamp = rospy.Time.now()
         merged_map.header.frame_id = self.global_frame
         merged_map.info.map_load_time = merged_map.header.stamp

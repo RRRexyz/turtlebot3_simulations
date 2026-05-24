@@ -10,8 +10,8 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 RECONSTRUCT_SCRIPT = PACKAGE_ROOT.parent / "turtlebot3_reconstruct" / "scripts" / "preview_mesh.py"
-# DEFAULT_MESH = PACKAGE_ROOT / "output" / "global_model_textured_mesh.ply"
-DEFAULT_MESH = "/home/adminwe/project/catkin_ws/src/turtlebot3_simulations/experiment4/results/group_d_gt_seed_overlap_icp/20260419_222906_841397/global_model_textured_mesh.ply"
+DEFAULT_MESH = PACKAGE_ROOT / "output" / "global_model_textured_mesh.ply"
+# DEFAULT_MESH = "/home/adminwe/project/catkin_ws/src/turtlebot3_simulations/experiment4/results/group_d_gt_seed_overlap_icp/20260420_131519_834085/global_model_textured_mesh.ply"
 
 def main() -> int:
     extra_args = sys.argv[1:]

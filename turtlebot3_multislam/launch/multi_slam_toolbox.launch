@@ -28,6 +28,7 @@
         <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
             <param name="robot_namespace" value="tb3_1" />
             <param name="other_robots" value="tb3_2,tb3_3" />
+            <param name="enable_mask" value="false" />
         </node>
     </group>
 
@@ -45,6 +46,7 @@
         <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
             <param name="robot_namespace" value="tb3_2" />
             <param name="other_robots" value="tb3_1,tb3_3" />
+            <param name="enable_mask" value="true" />
         </node>
     </group>
 
@@ -62,6 +64,7 @@
         <node pkg="turtlebot3_multislam" type="multi_robot_mask_node.py" name="multi_robot_mask_node" output="screen">
             <param name="robot_namespace" value="tb3_3" />
             <param name="other_robots" value="tb3_1,tb3_2" />
+            <param name="enable_mask" value="true" />
         </node>
     </group>
 

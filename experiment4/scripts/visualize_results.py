@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Visualization utilities for experiment 4 result artifacts."""
+"""Visualization utilities for Experiment 2 result artifacts."""
 
 from __future__ import annotations
 
@@ -31,10 +31,10 @@ GROUP_ORDER = [
 ]
 
 GROUP_LABELS = {
-    "group_a_no_gt_seed": "A No GT Seed",
-    "group_b_gt_seed_transform_only": "B GT Transform Only",
-    "group_c_gt_seed_direct_icp": "C GT + Direct ICP",
-    "group_d_gt_seed_overlap_icp": "D GT + Overlap ICP",
+    "group_a_no_gt_seed": "A 无真值初值",
+    "group_b_gt_seed_transform_only": "B 仅真值变换",
+    "group_c_gt_seed_direct_icp": "C 真值+直接配准",
+    "group_d_gt_seed_overlap_icp": "D 真值+重叠配准",
 }
 
 GROUP_COLORS = {
@@ -43,6 +43,14 @@ GROUP_COLORS = {
     "group_c_gt_seed_direct_icp": "#dd8452",
     "group_d_gt_seed_overlap_icp": "#55a868",
 }
+
+CHINESE_FONT_CANDIDATES = [
+    "LXGW WenKai",
+    "霞鹜文楷",
+    "LXGW WenKai Medium",
+    "LXGW WenKai Light",
+    "DejaVu Sans",
+]
 
 
 @dataclass
@@ -138,7 +146,10 @@ def configure_paper_style() -> None:
         "axes.edgecolor": "#333333",
         "axes.labelsize": 11,
         "axes.titlesize": 12,
+        "axes.unicode_minus": False,
+        "font.family": "sans-serif",
         "font.size": 10,
+        "font.sans-serif": CHINESE_FONT_CANDIDATES,
         "legend.fontsize": 9,
         "xtick.labelsize": 9,
         "ytick.labelsize": 9,
@@ -259,7 +270,7 @@ def draw_metric_bars(
         ax.text(
             x_positions[index],
             0.02 * max(values) if max(values) > 0 else 0.02,
-            "N/A",
+            "无数据",
             ha="center",
             va="bottom",
             fontsize=8,
@@ -269,7 +280,7 @@ def draw_metric_bars(
     ax.set_xticks(x_positions)
     ax.set_xticklabels(labels, rotation=12, ha="right")
     decorate_axes(ax, title, ylabel)
-    subtitle = "Higher is better" if better == "higher" else "Lower is better"
+    subtitle = "越高越好" if better == "higher" else "越低越好"
     ax.text(0.99, 1.02, subtitle, transform=ax.transAxes, ha="right", va="bottom", fontsize=9, color="#555555")
 
 
@@ -280,8 +291,8 @@ def plot_registration_fitness(grouped_runs: Dict[str, List[RunArtifacts]], outpu
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "mean_fitness"],
-        title="Experiment 4: Valid-Pair Registration Fitness",
-        ylabel="Fitness (uniform evaluation)",
+        title="实验4：有效配准对适应度",
+        ylabel="适应度（统一评估）",
         better="higher",
     )
     output_path = output_dir / "registration_fitness.png"
@@ -296,8 +307,8 @@ def plot_registration_rmse(grouped_runs: Dict[str, List[RunArtifacts]], output_d
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "mean_inlier_rmse"],
-        title="Experiment 4: Valid-Pair Registration RMSE",
-        ylabel="Inlier RMSE (m, uniform evaluation)",
+        title="实验4：有效配准对内点均方根误差",
+        ylabel="内点均方根误差（m，统一评估）",
         better="lower",
     )
     output_path = output_dir / "registration_rmse.png"
@@ -312,8 +323,8 @@ def plot_registration_validity(grouped_runs: Dict[str, List[RunArtifacts]], outp
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "valid_pair_count"],
-        title="Valid Pair Count",
-        ylabel="Pair Count",
+        title="有效配准对数量",
+        ylabel="配准对数量",
         better="higher",
     )
     draw_metric_bars(
@@ -321,11 +332,11 @@ def plot_registration_validity(grouped_runs: Dict[str, List[RunArtifacts]], outp
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "valid_pair_ratio"],
-        title="Valid Pair Ratio",
-        ylabel="Ratio",
+        title="有效配准对比例",
+        ylabel="比例",
         better="higher",
     )
-    fig.suptitle("Experiment 4: Pair Validity", fontsize=13, y=1.03)
+    fig.suptitle("实验4：配准对有效性", fontsize=13, y=1.03)
     output_path = output_dir / "registration_validity.png"
     save_figure(fig, output_path, dpi)
     return output_path
@@ -338,8 +349,8 @@ def plot_gt_transform_error(grouped_runs: Dict[str, List[RunArtifacts]], output_
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "mean_gt_translation_error_valid_only_m"],
-        title="Relative GT Translation Error",
-        ylabel="Translation Error (m)",
+        title="相对真值平移误差",
+        ylabel="平移误差（m）",
         better="lower",
     )
     draw_metric_bars(
@@ -347,11 +358,11 @@ def plot_gt_transform_error(grouped_runs: Dict[str, List[RunArtifacts]], output_
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["registration_metrics", "mean_gt_rotation_error_valid_only_deg"],
-        title="Relative GT Rotation Error",
-        ylabel="Rotation Error (deg)",
+        title="相对真值旋转误差",
+        ylabel="旋转误差（度）",
         better="lower",
     )
-    fig.suptitle("Experiment 4: Relative Ground-Truth Transform Error", fontsize=13, y=1.03)
+    fig.suptitle("实验4：相对真值变换误差", fontsize=13, y=1.03)
     output_path = output_dir / "gt_transform_error.png"
     save_figure(fig, output_path, dpi)
     return output_path
@@ -364,8 +375,8 @@ def plot_cloud_completeness(grouped_runs: Dict[str, List[RunArtifacts]], output_
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["global_metrics", "filtered_point_count"],
-        title="Filtered Point Count",
-        ylabel="Points",
+        title="滤波后点数",
+        ylabel="点数",
         better="higher",
     )
     draw_metric_bars(
@@ -373,11 +384,11 @@ def plot_cloud_completeness(grouped_runs: Dict[str, List[RunArtifacts]], output_
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["global_metrics", "filtered_bbox_volume"],
-        title="Spatial Coverage Volume",
-        ylabel="Bounding Box Volume (m³)",
+        title="空间覆盖体积",
+        ylabel="包围盒体积（m³）",
         better="higher",
     )
-    fig.suptitle("Experiment 4: Point-Cloud Completeness", fontsize=13, y=1.03)
+    fig.suptitle("实验4：点云完整性", fontsize=13, y=1.03)
     output_path = output_dir / "cloud_completeness.png"
     save_figure(fig, output_path, dpi)
     return output_path
@@ -390,8 +401,8 @@ def plot_mesh_continuity(grouped_runs: Dict[str, List[RunArtifacts]], output_dir
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["global_metrics", "mesh_largest_component_triangle_ratio"],
-        title="Largest Connected Component Ratio",
-        ylabel="Triangle Ratio",
+        title="最大连通分量比例",
+        ylabel="三角面比例",
         better="higher",
     )
     draw_metric_bars(
@@ -399,11 +410,11 @@ def plot_mesh_continuity(grouped_runs: Dict[str, List[RunArtifacts]], output_dir
         grouped_runs=grouped_runs,
         mode=mode,
         metric_path=["global_metrics", "mesh_component_count"],
-        title="Connected Component Count",
-        ylabel="Component Count",
+        title="连通分量数量",
+        ylabel="分量数量",
         better="lower",
     )
-    fig.suptitle("Experiment 4: Mesh Continuity", fontsize=13, y=1.03)
+    fig.suptitle("实验4：网格连续性", fontsize=13, y=1.03)
     output_path = output_dir / "mesh_continuity.png"
     save_figure(fig, output_path, dpi)
     return output_path

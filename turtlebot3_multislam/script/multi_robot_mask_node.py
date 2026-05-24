@@ -14,6 +14,8 @@ class MultiRobotMaskNode:
         self.other_frames = [r + '/base_footprint' for r in other_robots.split(',') if r]
         # 放大掩码半径，提供宽裕余量防止边角鬼影
         self.robot_radius = rospy.get_param('~robot_radius', 0.28)
+        # 设为 false 可关闭遮挡屏蔽，用于对比观察鬼影
+        self.enable_mask = rospy.get_param('~enable_mask', True)
 
         self.tf_listener = tf.TransformListener()
         self.pub = rospy.Publisher('scan_filtered', LaserScan, queue_size=10)
@@ -58,56 +60,54 @@ class MultiRobotMaskNode:
         else:
             filtered.angle_max = msg.angle_max
 
-        other_positions = []
-        for frame in self.other_frames:
-            pos = self.get_robot_position_local(msg.header.frame_id, frame)
-            if pos is not None:
-                other_positions.append(pos)
+        if self.enable_mask:
+            other_positions = []
+            for frame in self.other_frames:
+                pos = self.get_robot_position_local(msg.header.frame_id, frame)
+                if pos is not None:
+                    other_positions.append(pos)
 
-        if not other_positions:
-            self.pub.publish(filtered)
-            return
+            if other_positions:
+                masked_count = 0
+                # 给半径加上 1.5 倍余量，防止非圆形碰撞箱(比如waffle四个角)逃过检测
+                eff_radius = self.robot_radius * 1.5
 
-        masked_count = 0
-        # 给半径加上 1.5 倍余量，防止非圆形碰撞箱(比如waffle四个角)逃过检测
-        eff_radius = self.robot_radius * 1.5
+                for i, r in enumerate(filtered.ranges):
+                    if math.isnan(r) or r < msg.range_min or r > msg.range_max:
+                        continue
 
-        for i, r in enumerate(filtered.ranges):
-            if math.isnan(r) or r < msg.range_min or r > msg.range_max:
-                continue
+                    angle_i = msg.angle_min + i * msg.angle_increment
+                    mask_this_ray = False
 
-            angle_i = msg.angle_min + i * msg.angle_increment
-            mask_this_ray = False
+                    for rx, ry in other_positions:
+                        dist_to_robot = math.hypot(rx, ry)
+                        angle_to_robot = math.atan2(ry, rx)
 
-            for rx, ry in other_positions:
-                dist_to_robot = math.hypot(rx, ry)
-                angle_to_robot = math.atan2(ry, rx)
+                        if dist_to_robot <= eff_radius:
+                            mask_this_ray = True
+                            break
 
-                if dist_to_robot <= eff_radius:
-                    mask_this_ray = True
-                    break
+                        # 计算目标机器人在视角中占据的角度半宽
+                        angular_width = math.asin(eff_radius / dist_to_robot)
 
-                # 计算目标机器人在视角中占据的角度半宽
-                angular_width = math.asin(eff_radius / dist_to_robot)
+                        diff = (angle_i - angle_to_robot)
+                        diff = (diff + math.pi) % (2 * math.pi) - math.pi
 
-                diff = (angle_i - angle_to_robot)
-                diff = (diff + math.pi) % (2 * math.pi) - math.pi
+                        if abs(diff) <= angular_width:
+                            # 确保是真正受到机器人阻挡，而不是机器人视野背后很远的墙面
+                            if r <= dist_to_robot + eff_radius:
+                                mask_this_ray = True
+                                break
 
-                if abs(diff) <= angular_width:
-                    # 确保是真正受到机器人阻挡，而不是机器人视野背后很远的墙面
-                    if r <= dist_to_robot + eff_radius:
-                        mask_this_ray = True
-                        break
+                    if mask_this_ray:
+                        # 使用 inf 代替 nan：
+                        # nan 会被 SLAM 完全忽略（不更新地图）；使用 inf 会使这束射线主动清空路径上的障碍，
+                        # 这种"透视光线"特性可以积极地消除由于网络或TF瞬时延迟画出的"历史鬼影"。
+                        filtered.ranges[i] = float('inf')
+                        masked_count += 1
 
-            if mask_this_ray:
-                # 使用 inf 代替 nan：
-                # nan 会被 SLAM 完全忽略（不更新地图）；使用 inf 会使这束射线主动清空路径上的障碍，
-                # 这种"透视光线"特性可以积极地消除由于网络或TF瞬时延迟画出的"历史鬼影"。
-                filtered.ranges[i] = float('inf')
-                masked_count += 1
-
-        if masked_count > 0:
-            rospy.loginfo_throttle(1.0, f"({self.ns}) Masked {masked_count} points corresponding to other robots.")
+                if masked_count > 0:
+                    rospy.loginfo_throttle(1.0, f"({self.ns}) Masked {masked_count} points corresponding to other robots.")
 
         self.pub.publish(filtered)
 

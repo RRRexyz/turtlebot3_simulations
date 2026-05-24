@@ -19,8 +19,43 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import numpy as np
+
+# --- 配置中文字体 ---
+_CN_FONT_CANDIDATES = [
+    "LXGW WenKai",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK TC",
+    "AR PL UMing CN",
+    "AR PL UKai CN",
+    "WenQuanYi Micro Hei",
+    "WenQuanYi Zen Hei",
+    "SimHei",
+]
+
+
+def _find_chinese_font() -> str:
+    """Return the first available Chinese-capable font family name."""
+    available = {f.name for f in fm.fontManager.ttflist}
+    for name in _CN_FONT_CANDIDATES:
+        if name in available:
+            return name
+    # Fallback: scan for any font containing CJK characters
+    for font in fm.fontManager.ttflist:
+        try:
+            if any(0x4E00 <= ord(ch) <= 0x9FFF for ch in font.name):
+                return font.name
+        except Exception:
+            pass
+    return "sans-serif"
+
+
+_CN_FONT = _find_chinese_font()
+plt.rcParams["font.family"] = _CN_FONT
+plt.rcParams["font.sans-serif"] = [_CN_FONT]
+plt.rcParams["axes.unicode_minus"] = False  # 防止负号显示异常
 
 
 GROUP_ORDER = [
@@ -31,10 +66,10 @@ GROUP_ORDER = [
 ]
 
 GROUP_LABELS = {
-    "group_a_single_robot": "A Single Robot",
-    "group_b_ordered_nearest": "B Ordered Nearest",
-    "group_c_distance_greedy": "C Distance Greedy",
-    "group_d_full_method": "D Full Method",
+    "group_a_single_robot": "A 单机器人",
+    "group_b_ordered_nearest": "B 有序最近",
+    "group_c_distance_greedy": "C 距离贪心",
+    "group_d_full_method": "D 完整方法",
 }
 
 GROUP_COLORS = {
@@ -199,10 +234,10 @@ def save_figure(fig, output_path: Path, dpi: int) -> None:
 
 def plot_summary_bars(grouped_runs: Dict[str, List[RunArtifacts]], output_dir: Path, mode: str, dpi: int) -> List[Path]:
     metric_specs = [
-        ("exploration_completion_time_sec", "Completion Time", "Time (s)", "completion_time.png"),
-        ("final_known_area_m2", "Final Known Area", "Area (m²)", "final_known_area.png"),
-        ("total_path_length_m", "Total Path Length", "Length (m)", "total_path_length.png"),
-        ("total_goals_failed", "Failed Goals", "Count", "failed_goals.png"),
+        ("exploration_completion_time_sec", "完成时间", "时间 (秒)", "completion_time.png"),
+        ("final_known_area_m2", "最终已知面积", "面积 (m²)", "final_known_area.png"),
+        ("total_path_length_m", "总路径长度", "长度 (米)", "total_path_length.png"),
+        ("total_goals_failed", "失败目标数", "数量", "failed_goals.png"),
     ]
     generated = []
     groups = [group for group in GROUP_ORDER if group in grouped_runs]
@@ -221,8 +256,8 @@ def plot_summary_bars(grouped_runs: Dict[str, List[RunArtifacts]], output_dir: P
         x_positions = np.arange(len(groups))
         ax.bar(x_positions, values, yerr=errors if mode == "mean" else None, color=colors, alpha=0.9, capsize=6)
         ax.set_xticks(x_positions)
-        ax.set_xticklabels(labels, rotation=12, ha="right")
-        configure_axes(ax, f"Experiment 1: {title}", ylabel)
+        ax.set_xticklabels(labels, ha="center")
+        configure_axes(ax, f"实验1: {title}", ylabel)
         output_path = output_dir / filename
         save_figure(fig, output_path, dpi)
         generated.append(output_path)
@@ -248,11 +283,11 @@ def plot_goal_outcomes(grouped_runs: Dict[str, List[RunArtifacts]], output_dir: 
 
     fig, ax = plt.subplots(figsize=(8, 4.8))
     x_positions = np.arange(len(groups))
-    ax.bar(x_positions, success_values, color="#2ca02c", label="Succeeded")
-    ax.bar(x_positions, fail_values, bottom=success_values, color="#d62728", label="Failed")
+    ax.bar(x_positions, success_values, color="#2ca02c", label="成功")
+    ax.bar(x_positions, fail_values, bottom=success_values, color="#d62728", label="失败")
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(labels, rotation=12, ha="right")
-    configure_axes(ax, "Experiment 1: Goal Outcomes", "Count")
+    ax.set_xticklabels(labels, ha="center")
+    configure_axes(ax, "实验1: 目标结果", "数量")
     ax.legend()
     output_path = output_dir / "goal_outcomes.png"
     save_figure(fig, output_path, dpi)
@@ -288,8 +323,8 @@ def plot_path_lengths_per_robot(grouped_runs: Dict[str, List[RunArtifacts]], out
         )
 
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(labels, rotation=12, ha="right")
-    configure_axes(ax, "Experiment 1: Path Length per Robot", "Length (m)")
+    ax.set_xticklabels(labels, ha="center")
+    configure_axes(ax, "实验1: 各机器人路径长度", "长度 (米)")
     ax.legend()
     output_path = output_dir / "path_length_per_robot.png"
     save_figure(fig, output_path, dpi)
@@ -328,7 +363,7 @@ def plot_curve_comparison(
             ax.plot(rel_time, mean_values, label=label, color=color, linewidth=2.0)
             ax.fill_between(rel_time, mean_values - std_values, mean_values + std_values, color=color, alpha=0.18)
 
-    ax.set_xlabel("Exploration Time (s)")
+    ax.set_xlabel("探索时间 (秒)")
     configure_axes(ax, title, ylabel)
     ax.legend()
     output_path = output_dir / filename
@@ -405,8 +440,8 @@ def main(argv=None) -> int:
             args.dpi,
             series_name="map_growth",
             value_key="known_area_m2",
-            title="Experiment 1: Known Area Growth",
-            ylabel="Known Area (m²)",
+            title="实验1: 已知面积增长",
+            ylabel="已知面积 (m²)",
             filename="known_area_growth.png",
         )
     )
@@ -418,8 +453,8 @@ def main(argv=None) -> int:
             args.dpi,
             series_name="frontier_series",
             value_key="valid_frontier_count",
-            title="Experiment 1: Valid Frontier Count",
-            ylabel="Valid Frontier Count",
+            title="实验1: 有效前沿数量",
+            ylabel="有效前沿数量",
             filename="valid_frontiers.png",
         )
     )
@@ -431,8 +466,8 @@ def main(argv=None) -> int:
             args.dpi,
             series_name="frontier_series",
             value_key="idle_robot_count",
-            title="Experiment 1: Idle Robot Count",
-            ylabel="Idle Robot Count",
+            title="实验1: 空闲机器人数量",
+            ylabel="空闲机器人数量",
             filename="idle_robots.png",
         )
     )
